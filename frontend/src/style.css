@@ -9,6 +9,56 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
     "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+/* 覆盖 Arco Design 组件的字体大小 */
+* {
+    font-size: inherit;
+}
+
+.arco-btn {
+    font-size: 14px;
+}
+
+.arco-btn-size-small {
+    font-size: 13px;
+}
+
+.arco-statistic-title {
+    font-size: 13px !important;
+}
+
+.arco-statistic-value {
+    font-size: 24px !important;
+}
+
+.arco-card-header-title {
+    font-size: 16px !important;
+}
+
+.arco-tabs-tab {
+    font-size: 15px !important;
+}
+
+.arco-table-th,
+.arco-table-td {
+    font-size: 14px !important;
+}
+
+.arco-input,
+.arco-select-view-value,
+.arco-textarea {
+    font-size: 14px !important;
+}
+
+.arco-form-item-label {
+    font-size: 14px !important;
+}
+
+.arco-modal-title {
+    font-size: 16px !important;
 }
 
 #app {

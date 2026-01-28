@@ -1,12 +1,18 @@
 <script lang="ts" setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, defineProps } from 'vue'
+
+const props = defineProps<{
+  active: boolean
+}>()
 import {
   GetTasksByDate,
+  GetTasksByDateRange,
   GetProjects,
   CreateTask,
   UpdateTask,
   DeleteTask,
   UpdateTaskStatus,
+  CompleteTask,
   CalculateHours
 } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
@@ -22,46 +28,123 @@ interface TaskForm {
   start_time: string
   end_time: string
   hours: number
+  deadline: string
+  priority: string
+  urgency: string
   status: string
   hours_mode: 'direct' | 'calculate'
 }
 
+interface CompleteForm {
+  id: number
+  actual_start: string
+  actual_hours: number
+}
+
 const loading = ref(false)
-const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
+const dateRange = ref<string[]>([dayjs().format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')])
 const tasks = ref<main.Task[]>([])
 const projects = ref<main.Project[]>([])
 const modalVisible = ref(false)
+const completeModalVisible = ref(false)
 const isEditing = ref(false)
+
+// 筛选条件
+const filterProjectId = ref<number | undefined>(undefined)
+const filterStatus = ref<string | undefined>(undefined)
 
 const defaultForm = (): TaskForm => ({
   id: 0,
   project_id: undefined,
   name: '',
   description: '',
-  date: selectedDate.value,
+  date: dateRange.value[0],
   start_time: '',
   end_time: '',
   hours: 0,
+  deadline: '',
+  priority: 'medium',
+  urgency: 'medium',
   status: 'scheduled',
   hours_mode: 'direct'
 })
 
 const form = ref<TaskForm>(defaultForm())
 
-const columns = [
-  { title: '项目', dataIndex: 'project_name', width: 120 },
-  { title: '任务名称', dataIndex: 'name', ellipsis: true },
-  { title: '开始时间', dataIndex: 'start_time', width: 100 },
-  { title: '结束时间', dataIndex: 'end_time', width: 100 },
-  { title: '工时', dataIndex: 'hours', width: 80 },
-  { title: '状态', dataIndex: 'status', width: 100, slotName: 'status' },
-  { title: '操作', slotName: 'actions', width: 200 }
+const completeForm = ref<CompleteForm>({
+  id: 0,
+  actual_start: '',
+  actual_hours: 0
+})
+
+const currentTask = ref<main.Task | null>(null)
+
+// 筛选后的任务列表
+const filteredTasks = computed(() => {
+  let result = tasks.value
+  if (filterProjectId.value !== undefined) {
+    result = result.filter(t => t.project_id === filterProjectId.value)
+  }
+  if (filterStatus.value !== undefined) {
+    result = result.filter(t => t.status === filterStatus.value)
+  }
+  return result
+})
+
+// 判断是否为单日模式
+const isSingleDay = computed(() => {
+  return dateRange.value[0] === dateRange.value[1]
+})
+
+const columns = computed(() => {
+  const baseColumns: any[] = [
+    { title: '任务名称', dataIndex: 'name', ellipsis: true, slotName: 'name' },
+    { title: '项目', dataIndex: 'project_name', width: 100 },
+  ]
+
+  // 日期范围模式显示日期列
+  if (!isSingleDay.value) {
+    baseColumns.push({ title: '日期', dataIndex: 'date', width: 100 })
+  }
+
+  baseColumns.push(
+    { title: '开始', dataIndex: 'start_time', width: 70 },
+    { title: '工时', dataIndex: 'hours', width: 60 },
+    { title: '截止', dataIndex: 'deadline', width: 100, slotName: 'deadline' },
+    { title: '状态', dataIndex: 'status', width: 90, slotName: 'status' },
+    { title: '操作', slotName: 'actions', width: 180 }
+  )
+
+  return baseColumns
+})
+
+const priorityOptions = [
+  { value: 'high', label: '高', color: '#F53F3F' },
+  { value: 'medium', label: '中', color: '#FF7D00' },
+  { value: 'low', label: '低', color: '#86909c' }
+]
+
+const urgencyOptions = [
+  { value: 'high', label: '高', color: '#F53F3F' },
+  { value: 'medium', label: '中', color: '#FF7D00' },
+  { value: 'low', label: '低', color: '#86909c' }
+]
+
+const statusOptions = [
+  { value: 'scheduled', label: '已安排' },
+  { value: 'in_progress', label: '进行中' },
+  { value: 'completed', label: '已完成' }
 ]
 
 const loadTasks = async () => {
   loading.value = true
   try {
-    const result = await GetTasksByDate(selectedDate.value)
+    let result: main.Task[] | null
+    if (isSingleDay.value) {
+      result = await GetTasksByDate(dateRange.value[0])
+    } else {
+      result = await GetTasksByDateRange(dateRange.value[0], dateRange.value[1])
+    }
     tasks.value = result || []
   } catch (err) {
     console.error('加载任务失败:', err)
@@ -80,28 +163,43 @@ const loadProjects = async () => {
   }
 }
 
-const openCreateModal = () => {
+const openCreateModal = async () => {
   isEditing.value = false
   form.value = defaultForm()
-  form.value.date = selectedDate.value
+  form.value.date = dateRange.value[0]
+  await loadProjects()
   modalVisible.value = true
 }
 
-const openEditModal = (task: main.Task) => {
+const openEditModal = async (task: main.Task) => {
   isEditing.value = true
   form.value = {
     id: task.id,
     project_id: task.project_id,
     name: task.name,
     description: task.description,
-    date: task.date || selectedDate.value,
+    date: task.date || dateRange.value[0],
     start_time: task.start_time || '',
     end_time: task.end_time || '',
     hours: task.hours,
+    deadline: task.deadline || '',
+    priority: task.priority || 'medium',
+    urgency: task.urgency || 'medium',
     status: task.status,
     hours_mode: 'direct'
   }
+  await loadProjects()
   modalVisible.value = true
+}
+
+const openCompleteModal = (task: main.Task) => {
+  currentTask.value = task
+  completeForm.value = {
+    id: task.id,
+    actual_start: task.start_time || dayjs().format('HH:mm'),
+    actual_hours: task.hours || 0
+  }
+  completeModalVisible.value = true
 }
 
 const calculateTaskHours = async () => {
@@ -131,6 +229,9 @@ const handleSubmit = async () => {
       start_time: form.value.start_time || undefined,
       end_time: form.value.end_time || undefined,
       hours: form.value.hours,
+      deadline: form.value.deadline || undefined,
+      priority: form.value.priority,
+      urgency: form.value.urgency,
       status: form.value.status
     }
 
@@ -150,6 +251,23 @@ const handleSubmit = async () => {
   }
 }
 
+const handleComplete = async () => {
+  try {
+    const input: main.CompleteTaskInput = {
+      id: completeForm.value.id,
+      actual_start: completeForm.value.actual_start || undefined,
+      actual_hours: completeForm.value.actual_hours
+    }
+    await CompleteTask(input)
+    Message.success('任务已完成')
+    completeModalVisible.value = false
+    await loadTasks()
+  } catch (err) {
+    console.error('完成任务失败:', err)
+    Message.error('操作失败')
+  }
+}
+
 const handleDelete = async (task: main.Task) => {
   try {
     await DeleteTask(task.id)
@@ -162,13 +280,17 @@ const handleDelete = async (task: main.Task) => {
 }
 
 const handleStatusChange = async (task: main.Task, status: string) => {
-  try {
-    await UpdateTaskStatus(task.id, status)
-    Message.success('状态已更新')
-    await loadTasks()
-  } catch (err) {
-    console.error('更新状态失败:', err)
-    Message.error('更新失败')
+  if (status === 'completed') {
+    openCompleteModal(task)
+  } else {
+    try {
+      await UpdateTaskStatus(task.id, status)
+      Message.success('状态已更新')
+      await loadTasks()
+    } catch (err) {
+      console.error('更新状态失败:', err)
+      Message.error('更新失败')
+    }
   }
 }
 
@@ -186,12 +308,32 @@ const getStatusText = (status: string) => {
     case 'completed': return '已完成'
     case 'in_progress': return '进行中'
     case 'scheduled': return '已安排'
-    default: return '待处理'
+    default: return '待办'
   }
 }
 
-watch(selectedDate, () => {
+const getPriorityColor = (priority: string) => {
+  return priorityOptions.find(p => p.value === priority)?.color || '#86909c'
+}
+
+const getUrgencyColor = (urgency: string) => {
+  return urgencyOptions.find(u => u.value === urgency)?.color || '#86909c'
+}
+
+const isOverdue = (task: main.Task) => {
+  if (!task.deadline || task.status === 'completed') return false
+  return dayjs(task.deadline).isBefore(dayjs(), 'day')
+}
+
+watch(dateRange, () => {
   loadTasks()
+})
+
+// 当标签页激活时重新加载数据
+watch(() => props.active, (isActive) => {
+  if (isActive) {
+    loadTasks()
+  }
 })
 
 watch(() => form.value.hours_mode, () => {
@@ -216,11 +358,34 @@ onMounted(() => {
   <div class="task-management">
     <!-- 工具栏 -->
     <div class="toolbar">
-      <a-date-picker
-        v-model="selectedDate"
-        style="width: 200px"
-        :allow-clear="false"
-      />
+      <div class="toolbar-left">
+        <a-range-picker
+          v-model="dateRange"
+          style="width: 260px"
+          :allow-clear="false"
+        />
+        <a-select
+          v-model="filterProjectId"
+          placeholder="按项目筛选"
+          allow-clear
+          style="width: 140px"
+        >
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </a-option>
+        </a-select>
+        <a-select
+          v-model="filterStatus"
+          placeholder="按状态筛选"
+          allow-clear
+          style="width: 120px"
+        >
+          <a-option v-for="s in statusOptions" :key="s.value" :value="s.value">
+            {{ s.label }}
+          </a-option>
+        </a-select>
+        <span class="task-count">共 {{ filteredTasks.length }} 条任务</span>
+      </div>
       <a-button type="primary" @click="openCreateModal">
         <template #icon><icon-plus /></template>
         新建任务
@@ -231,11 +396,28 @@ onMounted(() => {
     <a-table
       :loading="loading"
       :columns="columns"
-      :data="tasks"
+      :data="filteredTasks"
       :pagination="false"
       row-key="id"
       class="tasks-table"
     >
+      <template #name="{ record }">
+        <div class="task-name-cell">
+          <span class="task-name" :class="{ 'completed': record.status === 'completed' }">
+            {{ record.name }}
+          </span>
+          <span class="task-tags">
+            <a-tag v-if="record.priority === 'high'" size="small" :color="getPriorityColor(record.priority)">重要</a-tag>
+            <a-tag v-if="record.urgency === 'high'" size="small" :color="getUrgencyColor(record.urgency)">紧急</a-tag>
+          </span>
+        </div>
+      </template>
+      <template #deadline="{ record }">
+        <span v-if="record.deadline" :class="{ 'overdue': isOverdue(record) }">
+          {{ record.deadline }}
+          <icon-exclamation-circle-fill v-if="isOverdue(record)" class="overdue-icon" />
+        </span>
+      </template>
       <template #status="{ record }">
         <a-dropdown>
           <a-tag :color="getStatusColor(record.status)" style="cursor: pointer">
@@ -250,6 +432,14 @@ onMounted(() => {
       </template>
       <template #actions="{ record }">
         <a-space>
+          <a-button
+            v-if="record.status !== 'completed'"
+            type="primary"
+            size="small"
+            @click="openCompleteModal(record)"
+          >
+            完成
+          </a-button>
           <a-button type="text" size="small" @click="openEditModal(record)">
             编辑
           </a-button>
@@ -268,22 +458,53 @@ onMounted(() => {
       :title="isEditing ? '编辑任务' : '新建任务'"
       @ok="handleSubmit"
       @cancel="modalVisible = false"
+      :width="520"
     >
       <a-form :model="form" layout="vertical">
         <a-form-item label="任务名称" required>
           <a-input v-model="form.name" placeholder="请输入任务名称" />
         </a-form-item>
 
-        <a-form-item label="所属项目">
-          <a-select v-model="form.project_id" placeholder="选择项目（可选）" allow-clear>
-            <a-option v-for="p in projects" :key="p.id" :value="p.id">
-              {{ p.name }}
-            </a-option>
-          </a-select>
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="所属项目">
+              <a-select v-model="form.project_id" placeholder="选择项目" allow-clear>
+                <a-option v-for="p in projects" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </a-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="计划日期">
+              <a-date-picker v-model="form.date" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item label="日期">
-          <a-date-picker v-model="form.date" style="width: 100%" />
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="重要程度">
+              <a-radio-group v-model="form.priority" type="button">
+                <a-radio v-for="p in priorityOptions" :key="p.value" :value="p.value">
+                  <span :style="{ color: form.priority === p.value ? '#fff' : p.color }">{{ p.label }}</span>
+                </a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="紧急程度">
+              <a-radio-group v-model="form.urgency" type="button">
+                <a-radio v-for="u in urgencyOptions" :key="u.value" :value="u.value">
+                  <span :style="{ color: form.urgency === u.value ? '#fff' : u.color }">{{ u.label }}</span>
+                </a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-form-item label="截止日期">
+          <a-date-picker v-model="form.deadline" style="width: 100%" placeholder="选择截止日期（可选）" allow-clear />
         </a-form-item>
 
         <a-form-item label="工时录入方式">
@@ -294,53 +515,28 @@ onMounted(() => {
         </a-form-item>
 
         <a-row :gutter="16">
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item label="开始时间">
-              <a-time-picker
-                v-model="form.start_time"
-                format="HH:mm"
-                style="width: 100%"
-              />
+              <a-time-picker v-model="form.start_time" format="HH:mm" style="width: 100%" />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item v-if="form.hours_mode === 'calculate'" label="结束时间">
-              <a-time-picker
-                v-model="form.end_time"
-                format="HH:mm"
-                style="width: 100%"
-              />
+              <a-time-picker v-model="form.end_time" format="HH:mm" style="width: 100%" />
             </a-form-item>
-            <a-form-item v-else label="工时（小时）">
-              <a-input-number
-                v-model="form.hours"
-                :min="0"
-                :max="24"
-                :precision="1"
-                :step="0.5"
-                style="width: 100%"
-              />
+            <a-form-item v-else label="预计工时">
+              <a-input-number v-model="form.hours" :min="0" :max="24" :precision="1" :step="0.5" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8" v-if="form.hours_mode === 'calculate'">
+            <a-form-item label="计算工时">
+              <a-input-number v-model="form.hours" :min="0" :max="24" :precision="1" disabled style="width: 100%" />
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-form-item v-if="form.hours_mode === 'calculate'" label="计算工时">
-          <a-input-number
-            v-model="form.hours"
-            :min="0"
-            :max="24"
-            :precision="1"
-            disabled
-            style="width: 100%"
-          />
-        </a-form-item>
-
         <a-form-item label="任务描述">
-          <a-textarea
-            v-model="form.description"
-            placeholder="请输入任务描述（可选）"
-            :auto-size="{ minRows: 2, maxRows: 4 }"
-          />
+          <a-textarea v-model="form.description" placeholder="请输入任务描述（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
         </a-form-item>
 
         <a-form-item label="状态">
@@ -349,6 +545,33 @@ onMounted(() => {
             <a-option value="in_progress">进行中</a-option>
             <a-option value="completed">已完成</a-option>
           </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 完成任务弹窗 -->
+    <a-modal
+      v-model:visible="completeModalVisible"
+      title="完成任务"
+      @ok="handleComplete"
+      @cancel="completeModalVisible = false"
+    >
+      <a-alert v-if="currentTask" type="info" style="margin-bottom: 16px">
+        确认完成任务「{{ currentTask.name }}」
+      </a-alert>
+      <a-form :model="completeForm" layout="vertical">
+        <a-form-item label="实际开始时间">
+          <a-time-picker v-model="completeForm.actual_start" format="HH:mm" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="实际工时（小时）" required>
+          <a-input-number
+            v-model="completeForm.actual_hours"
+            :min="0"
+            :max="24"
+            :precision="1"
+            :step="0.5"
+            style="width: 100%"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -365,10 +588,49 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-count {
+  color: #86909c;
+  font-size: 14px;
 }
 
 .tasks-table {
   background: #2a2a2b;
+}
+
+.task-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-name.completed {
+  text-decoration: line-through;
+  color: #86909c;
+}
+
+.task-tags {
+  display: flex;
+  gap: 4px;
+}
+
+.overdue {
+  color: #F53F3F;
+}
+
+.overdue-icon {
+  margin-left: 4px;
+  color: #F53F3F;
 }
 
 :deep(.arco-table-th) {

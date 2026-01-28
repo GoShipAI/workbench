@@ -1,10 +1,161 @@
 export namespace main {
 	
+	export class Agent {
+	    id: number;
+	    name: string;
+	    description: string;
+	    prompt: string;
+	    provider_id?: number;
+	    model: string;
+	    enabled: boolean;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Agent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.prompt = source["prompt"];
+	        this.provider_id = source["provider_id"];
+	        this.model = source["model"];
+	        this.enabled = source["enabled"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AgentInput {
+	    id: number;
+	    name: string;
+	    description: string;
+	    prompt: string;
+	    provider_id?: number;
+	    model: string;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.prompt = source["prompt"];
+	        this.provider_id = source["provider_id"];
+	        this.model = source["model"];
+	        this.enabled = source["enabled"];
+	    }
+	}
+	export class CompleteTaskInput {
+	    id: number;
+	    actual_start?: string;
+	    actual_hours: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CompleteTaskInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.actual_start = source["actual_start"];
+	        this.actual_hours = source["actual_hours"];
+	    }
+	}
+	export class ModelProvider {
+	    id: number;
+	    name: string;
+	    label: string;
+	    api_key: string;
+	    base_url: string;
+	    enabled: boolean;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelProvider(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.label = source["label"];
+	        this.api_key = source["api_key"];
+	        this.base_url = source["base_url"];
+	        this.enabled = source["enabled"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ModelProviderInput {
+	    id: number;
+	    name: string;
+	    label: string;
+	    api_key: string;
+	    base_url: string;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelProviderInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.label = source["label"];
+	        this.api_key = source["api_key"];
+	        this.base_url = source["base_url"];
+	        this.enabled = source["enabled"];
+	    }
+	}
 	export class Project {
 	    id: number;
 	    name: string;
 	    description: string;
 	    color: string;
+	    archived: boolean;
 	    // Go type: time
 	    created_at: any;
 	    task_count: number;
@@ -19,6 +170,7 @@ export namespace main {
 	        this.name = source["name"];
 	        this.description = source["description"];
 	        this.color = source["color"];
+	        this.archived = source["archived"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.task_count = source["task_count"];
 	    }
@@ -51,7 +203,12 @@ export namespace main {
 	    start_time?: string;
 	    end_time?: string;
 	    hours: number;
+	    deadline?: string;
+	    priority: string;
+	    urgency: string;
 	    status: string;
+	    actual_start?: string;
+	    actual_hours: number;
 	    // Go type: time
 	    created_at: any;
 	
@@ -70,7 +227,12 @@ export namespace main {
 	        this.start_time = source["start_time"];
 	        this.end_time = source["end_time"];
 	        this.hours = source["hours"];
+	        this.deadline = source["deadline"];
+	        this.priority = source["priority"];
+	        this.urgency = source["urgency"];
 	        this.status = source["status"];
+	        this.actual_start = source["actual_start"];
+	        this.actual_hours = source["actual_hours"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
 	
@@ -101,6 +263,9 @@ export namespace main {
 	    start_time?: string;
 	    end_time?: string;
 	    hours: number;
+	    deadline?: string;
+	    priority: string;
+	    urgency: string;
 	    status: string;
 	
 	    static createFrom(source: any = {}) {
@@ -117,6 +282,9 @@ export namespace main {
 	        this.start_time = source["start_time"];
 	        this.end_time = source["end_time"];
 	        this.hours = source["hours"];
+	        this.deadline = source["deadline"];
+	        this.priority = source["priority"];
+	        this.urgency = source["urgency"];
 	        this.status = source["status"];
 	    }
 	}

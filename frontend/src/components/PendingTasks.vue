@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, defineProps } from 'vue'
+
+const props = defineProps<{
+  active: boolean
+}>()
 import {
   GetPendingTasks,
   GetProjects,
@@ -18,6 +22,9 @@ interface TaskForm {
   name: string
   description: string
   hours: number
+  deadline: string
+  priority: string
+  urgency: string
 }
 
 const loading = ref(false)
@@ -29,15 +36,42 @@ const isEditing = ref(false)
 const selectedTask = ref<main.Task | null>(null)
 const assignDate = ref(dayjs().format('YYYY-MM-DD'))
 
+// 筛选条件
+const filterProjectId = ref<number | undefined>(undefined)
+
 const defaultForm = (): TaskForm => ({
   id: 0,
   project_id: undefined,
   name: '',
   description: '',
-  hours: 0
+  hours: 0,
+  deadline: '',
+  priority: 'medium',
+  urgency: 'medium'
 })
 
 const form = ref<TaskForm>(defaultForm())
+
+const priorityOptions = [
+  { value: 'high', label: '高', color: '#F53F3F' },
+  { value: 'medium', label: '中', color: '#FF7D00' },
+  { value: 'low', label: '低', color: '#86909c' }
+]
+
+const urgencyOptions = [
+  { value: 'high', label: '高', color: '#F53F3F' },
+  { value: 'medium', label: '中', color: '#FF7D00' },
+  { value: 'low', label: '低', color: '#86909c' }
+]
+
+// 筛选后的任务列表
+const filteredTasks = computed(() => {
+  let result = tasks.value
+  if (filterProjectId.value !== undefined) {
+    result = result.filter(t => t.project_id === filterProjectId.value)
+  }
+  return result
+})
 
 const loadTasks = async () => {
   loading.value = true
@@ -45,7 +79,7 @@ const loadTasks = async () => {
     const result = await GetPendingTasks()
     tasks.value = result || []
   } catch (err) {
-    console.error('加载待处理任务失败:', err)
+    console.error('加载待办任务失败:', err)
     Message.error('加载任务失败')
   } finally {
     loading.value = false
@@ -61,21 +95,26 @@ const loadProjects = async () => {
   }
 }
 
-const openCreateModal = () => {
+const openCreateModal = async () => {
   isEditing.value = false
   form.value = defaultForm()
+  await loadProjects()
   modalVisible.value = true
 }
 
-const openEditModal = (task: main.Task) => {
+const openEditModal = async (task: main.Task) => {
   isEditing.value = true
   form.value = {
     id: task.id,
     project_id: task.project_id,
     name: task.name,
     description: task.description,
-    hours: task.hours
+    hours: task.hours,
+    deadline: task.deadline || '',
+    priority: task.priority || 'medium',
+    urgency: task.urgency || 'medium'
   }
+  await loadProjects()
   modalVisible.value = true
 }
 
@@ -101,6 +140,9 @@ const handleSubmit = async () => {
       start_time: undefined,
       end_time: undefined,
       hours: form.value.hours,
+      deadline: form.value.deadline || undefined,
+      priority: form.value.priority,
+      urgency: form.value.urgency,
       status: 'pending'
     }
 
@@ -145,6 +187,26 @@ const handleDelete = async (task: main.Task) => {
   }
 }
 
+const getPriorityColor = (priority: string) => {
+  return priorityOptions.find(p => p.value === priority)?.color || '#86909c'
+}
+
+const getUrgencyColor = (urgency: string) => {
+  return urgencyOptions.find(u => u.value === urgency)?.color || '#86909c'
+}
+
+const isOverdue = (task: main.Task) => {
+  if (!task.deadline) return false
+  return dayjs(task.deadline).isBefore(dayjs(), 'day')
+}
+
+// 当标签页激活时重新加载数据
+watch(() => props.active, (isActive) => {
+  if (isActive) {
+    loadTasks()
+  }
+})
+
 onMounted(() => {
   loadTasks()
   loadProjects()
@@ -155,9 +217,21 @@ onMounted(() => {
   <div class="pending-tasks">
     <!-- 工具栏 -->
     <div class="toolbar">
-      <div class="title">
-        待处理任务
-        <a-badge :count="tasks.length" :max-count="99" />
+      <div class="toolbar-left">
+        <div class="title">
+          待办任务
+          <a-badge :count="filteredTasks.length" :max-count="99" />
+        </div>
+        <a-select
+          v-model="filterProjectId"
+          placeholder="按项目筛选"
+          allow-clear
+          style="width: 160px"
+        >
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </a-option>
+        </a-select>
       </div>
       <a-button type="primary" @click="openCreateModal">
         <template #icon><icon-plus /></template>
@@ -167,23 +241,29 @@ onMounted(() => {
 
     <!-- 任务列表 -->
     <a-spin :loading="loading">
-      <a-empty v-if="tasks.length === 0" description="暂无待处理任务" />
+      <a-empty v-if="filteredTasks.length === 0" description="暂无待办任务" />
 
-      <a-list v-else :bordered="false">
-        <a-list-item v-for="task in tasks" :key="task.id" class="task-item">
-          <a-list-item-meta>
-            <template #title>
+      <div v-else class="task-list">
+        <div v-for="task in filteredTasks" :key="task.id" class="task-card">
+          <div class="task-content">
+            <div class="task-header">
               <span class="task-name">{{ task.name }}</span>
-              <a-tag v-if="task.project_name" size="small" class="project-tag">
-                {{ task.project_name }}
-              </a-tag>
-            </template>
-            <template #description>
+              <span class="task-tags">
+                <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                <a-tag v-if="task.priority === 'high'" size="small" :color="getPriorityColor(task.priority)">重要</a-tag>
+                <a-tag v-if="task.urgency === 'high'" size="small" :color="getUrgencyColor(task.urgency)">紧急</a-tag>
+              </span>
+            </div>
+            <div class="task-meta">
               <span v-if="task.description" class="task-desc">{{ task.description }}</span>
-              <span v-if="task.hours" class="hours-text">预计 {{ task.hours }} 小时</span>
-            </template>
-          </a-list-item-meta>
-          <template #actions>
+              <span v-if="task.hours" class="meta-item">预计 {{ task.hours }}h</span>
+              <span v-if="task.deadline" class="meta-item" :class="{ 'overdue': isOverdue(task) }">
+                截止: {{ task.deadline }}
+                <icon-exclamation-circle-fill v-if="isOverdue(task)" class="overdue-icon" />
+              </span>
+            </div>
+          </div>
+          <div class="task-actions">
             <a-button type="primary" size="small" @click="openAssignModal(task)">
               分配日期
             </a-button>
@@ -195,17 +275,18 @@ onMounted(() => {
                 删除
               </a-button>
             </a-popconfirm>
-          </template>
-        </a-list-item>
-      </a-list>
+          </div>
+        </div>
+      </div>
     </a-spin>
 
     <!-- 新建/编辑弹窗 -->
     <a-modal
       v-model:visible="modalVisible"
-      :title="isEditing ? '编辑任务' : '新建待处理任务'"
+      :title="isEditing ? '编辑任务' : '新建待办任务'"
       @ok="handleSubmit"
       @cancel="modalVisible = false"
+      :width="480"
     >
       <a-form :model="form" layout="vertical">
         <a-form-item label="任务名称" required>
@@ -220,16 +301,46 @@ onMounted(() => {
           </a-select>
         </a-form-item>
 
-        <a-form-item label="预计工时（小时）">
-          <a-input-number
-            v-model="form.hours"
-            :min="0"
-            :max="100"
-            :precision="1"
-            :step="0.5"
-            style="width: 100%"
-          />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="重要程度">
+              <a-radio-group v-model="form.priority" type="button">
+                <a-radio v-for="p in priorityOptions" :key="p.value" :value="p.value">
+                  <span :style="{ color: form.priority === p.value ? '#fff' : p.color }">{{ p.label }}</span>
+                </a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="紧急程度">
+              <a-radio-group v-model="form.urgency" type="button">
+                <a-radio v-for="u in urgencyOptions" :key="u.value" :value="u.value">
+                  <span :style="{ color: form.urgency === u.value ? '#fff' : u.color }">{{ u.label }}</span>
+                </a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="截止日期">
+              <a-date-picker v-model="form.deadline" style="width: 100%" placeholder="可选" allow-clear />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="预计工时（小时）">
+              <a-input-number
+                v-model="form.hours"
+                :min="0"
+                :max="100"
+                :precision="1"
+                :step="0.5"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item label="任务描述">
           <a-textarea
@@ -267,6 +378,12 @@ onMounted(() => {
 <style scoped>
 .pending-tasks {
   padding: 0;
+  width: 100%;
+}
+
+.pending-tasks :deep(.arco-spin) {
+  width: 100%;
+  display: block;
 }
 
 .toolbar {
@@ -274,6 +391,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .title {
@@ -284,27 +407,87 @@ onMounted(() => {
   gap: 8px;
 }
 
-.task-item {
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.task-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   background: #2a2a2b;
   border-radius: 8px;
+  padding: 16px 20px;
+  transition: background 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.task-card:hover {
+  background: #333;
+}
+
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
-  padding: 12px 16px;
+  flex-wrap: wrap;
 }
 
 .task-name {
   font-weight: 500;
+  font-size: 15px;
 }
 
-.project-tag {
-  margin-left: 8px;
+.task-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #86909c;
+  font-size: 13px;
+  flex-wrap: wrap;
 }
 
 .task-desc {
-  color: #86909c;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hours-text {
-  margin-left: 12px;
-  color: #165DFF;
+.meta-item {
+  white-space: nowrap;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.overdue {
+  color: #F53F3F;
+}
+
+.overdue-icon {
+  margin-left: 4px;
+  color: #F53F3F;
 }
 </style>

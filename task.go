@@ -7,18 +7,24 @@ import (
 	"time"
 )
 
+// 任务查询的基础 SQL
+const taskSelectSQL = `
+	SELECT t.id, t.project_id, COALESCE(p.name, '') as project_name,
+		   t.name, t.description, t.date, t.start_time, t.end_time,
+		   t.hours, t.deadline, COALESCE(t.priority, 'medium') as priority,
+		   COALESCE(t.urgency, 'medium') as urgency, t.status,
+		   t.actual_start, COALESCE(t.actual_hours, 0) as actual_hours, t.created_at
+	FROM tasks t
+	LEFT JOIN projects p ON t.project_id = p.id
+`
+
 // GetTasksByDate 根据日期获取任务
 func (a *App) GetTasksByDate(date string) ([]Task, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	rows, err := db.Query(`
-		SELECT t.id, t.project_id, COALESCE(p.name, '') as project_name,
-			   t.name, t.description, t.date, t.start_time, t.end_time,
-			   t.hours, t.status, t.created_at
-		FROM tasks t
-		LEFT JOIN projects p ON t.project_id = p.id
+	rows, err := db.Query(taskSelectSQL+`
 		WHERE t.date = ?
 		ORDER BY t.start_time, t.created_at
 	`, date)
@@ -31,24 +37,42 @@ func (a *App) GetTasksByDate(date string) ([]Task, error) {
 	return scanTasks(rows)
 }
 
-// GetPendingTasks 获取待处理任务（无日期）
+// GetTasksByDateRange 根据日期范围获取任务
+func (a *App) GetTasksByDateRange(startDate, endDate string) ([]Task, error) {
+	if db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
+	rows, err := db.Query(taskSelectSQL+`
+		WHERE t.date >= ? AND t.date <= ?
+		ORDER BY t.date, t.start_time, t.created_at
+	`, startDate, endDate)
+	if err != nil {
+		log.Printf("查询任务失败: %v", err)
+		return nil, fmt.Errorf("查询任务失败: %v", err)
+	}
+	defer rows.Close()
+
+	return scanTasks(rows)
+}
+
+// GetPendingTasks 获取待办任务（无日期）
 func (a *App) GetPendingTasks() ([]Task, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	rows, err := db.Query(`
-		SELECT t.id, t.project_id, COALESCE(p.name, '') as project_name,
-			   t.name, t.description, t.date, t.start_time, t.end_time,
-			   t.hours, t.status, t.created_at
-		FROM tasks t
-		LEFT JOIN projects p ON t.project_id = p.id
+	rows, err := db.Query(taskSelectSQL + `
 		WHERE t.date IS NULL
-		ORDER BY t.created_at DESC
+		ORDER BY
+			CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+			CASE t.urgency WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+			t.deadline ASC NULLS LAST,
+			t.created_at DESC
 	`)
 	if err != nil {
-		log.Printf("查询待处理任务失败: %v", err)
-		return nil, fmt.Errorf("查询待处理任务失败: %v", err)
+		log.Printf("查询待办任务失败: %v", err)
+		return nil, fmt.Errorf("查询待办任务失败: %v", err)
 	}
 	defer rows.Close()
 
@@ -56,12 +80,13 @@ func (a *App) GetPendingTasks() ([]Task, error) {
 }
 
 // scanTasks 扫描任务结果集
-func scanTasks(rows interface{ Next() bool; Scan(...interface{}) error }) ([]Task, error) {
+func scanTasks(rows interface{ Next() bool; Scan(...any) error }) ([]Task, error) {
 	var tasks []Task
 	for rows.Next() {
 		var t Task
 		if err := rows.Scan(&t.ID, &t.ProjectID, &t.ProjectName, &t.Name, &t.Description,
-			&t.Date, &t.StartTime, &t.EndTime, &t.Hours, &t.Status, &t.CreatedAt); err != nil {
+			&t.Date, &t.StartTime, &t.EndTime, &t.Hours, &t.Deadline, &t.Priority,
+			&t.Urgency, &t.Status, &t.ActualStart, &t.ActualHours, &t.CreatedAt); err != nil {
 			log.Printf("扫描任务失败: %v", err)
 			return nil, fmt.Errorf("扫描任务失败: %v", err)
 		}
@@ -90,10 +115,20 @@ func (a *App) CreateTask(input TaskInput) (*Task, error) {
 		}
 	}
 
+	// 默认优先级和紧急程度
+	priority := input.Priority
+	if priority == "" {
+		priority = PriorityMedium
+	}
+	urgency := input.Urgency
+	if urgency == "" {
+		urgency = UrgencyMedium
+	}
+
 	result, err := db.Exec(`
-		INSERT INTO tasks (project_id, name, description, date, start_time, end_time, hours, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, input.ProjectID, input.Name, input.Description, input.Date, input.StartTime, input.EndTime, input.Hours, status)
+		INSERT INTO tasks (project_id, name, description, date, start_time, end_time, hours, deadline, priority, urgency, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, input.ProjectID, input.Name, input.Description, input.Date, input.StartTime, input.EndTime, input.Hours, input.Deadline, priority, urgency, status)
 	if err != nil {
 		log.Printf("创建任务失败: %v", err)
 		return nil, fmt.Errorf("创建任务失败: %v", err)
@@ -106,15 +141,10 @@ func (a *App) CreateTask(input TaskInput) (*Task, error) {
 
 	// 查询创建的任务
 	var t Task
-	err = db.QueryRow(`
-		SELECT t.id, t.project_id, COALESCE(p.name, '') as project_name,
-			   t.name, t.description, t.date, t.start_time, t.end_time,
-			   t.hours, t.status, t.created_at
-		FROM tasks t
-		LEFT JOIN projects p ON t.project_id = p.id
-		WHERE t.id = ?
-	`, id).Scan(&t.ID, &t.ProjectID, &t.ProjectName, &t.Name, &t.Description,
-		&t.Date, &t.StartTime, &t.EndTime, &t.Hours, &t.Status, &t.CreatedAt)
+	err = db.QueryRow(taskSelectSQL+`WHERE t.id = ?`, id).Scan(
+		&t.ID, &t.ProjectID, &t.ProjectName, &t.Name, &t.Description,
+		&t.Date, &t.StartTime, &t.EndTime, &t.Hours, &t.Deadline, &t.Priority,
+		&t.Urgency, &t.Status, &t.ActualStart, &t.ActualHours, &t.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("查询任务失败: %v", err)
 	}
@@ -136,10 +166,12 @@ func (a *App) UpdateTask(input TaskInput) error {
 	_, err := db.Exec(`
 		UPDATE tasks
 		SET project_id = ?, name = ?, description = ?, date = ?,
-			start_time = ?, end_time = ?, hours = ?, status = ?
+			start_time = ?, end_time = ?, hours = ?, deadline = ?,
+			priority = ?, urgency = ?, status = ?
 		WHERE id = ?
 	`, input.ProjectID, input.Name, input.Description, input.Date,
-		input.StartTime, input.EndTime, input.Hours, input.Status, input.ID)
+		input.StartTime, input.EndTime, input.Hours, input.Deadline,
+		input.Priority, input.Urgency, input.Status, input.ID)
 	if err != nil {
 		log.Printf("更新任务失败: %v", err)
 		return fmt.Errorf("更新任务失败: %v", err)
@@ -184,7 +216,7 @@ func (a *App) AssignTaskToDate(taskID int64, date string) error {
 	return nil
 }
 
-// UpdateTaskStatus 更新任务状态
+// UpdateTaskStatus 更新任务状态（简单状态切换，不记录实际工时）
 func (a *App) UpdateTaskStatus(id int64, status string) error {
 	if db == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -197,6 +229,26 @@ func (a *App) UpdateTaskStatus(id int64, status string) error {
 	}
 
 	log.Printf("任务 %d 状态已更新为 %s", id, status)
+	return nil
+}
+
+// CompleteTask 完成任务（记录实际开始时间和工时）
+func (a *App) CompleteTask(input CompleteTaskInput) error {
+	if db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	_, err := db.Exec(`
+		UPDATE tasks
+		SET status = ?, actual_start = ?, actual_hours = ?
+		WHERE id = ?
+	`, TaskStatusCompleted, input.ActualStart, input.ActualHours, input.ID)
+	if err != nil {
+		log.Printf("完成任务失败: %v", err)
+		return fmt.Errorf("完成任务失败: %v", err)
+	}
+
+	log.Printf("任务 %d 已完成，实际工时: %.1f", input.ID, input.ActualHours)
 	return nil
 }
 
@@ -240,15 +292,20 @@ func (a *App) GetWorkbenchData() (*WorkbenchData, error) {
 		plannedHours += t.Hours
 		if t.Status == TaskStatusCompleted {
 			completedCount++
-			completedHours += t.Hours
+			// 优先使用实际工时，否则使用预计工时
+			if t.ActualHours > 0 {
+				completedHours += t.ActualHours
+			} else {
+				completedHours += t.Hours
+			}
 		}
 	}
 
-	// 获取待处理任务数
+	// 获取待办任务数
 	var pendingCount int
 	err = db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE date IS NULL`).Scan(&pendingCount)
 	if err != nil {
-		log.Printf("查询待处理任务数失败: %v", err)
+		log.Printf("查询待办任务数失败: %v", err)
 	}
 
 	return &WorkbenchData{

@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import Workbench from './components/Workbench.vue'
 import TaskManagement from './components/TaskManagement.vue'
 import PendingTasks from './components/PendingTasks.vue'
-import ProjectManagement from './components/ProjectManagement.vue'
+import Settings from './components/Settings.vue'
 
 const activeTab = ref('workbench')
 
@@ -25,16 +25,16 @@ onMounted(() => {
     <a-layout-content class="content">
       <a-tabs v-model:active-key="activeTab" class="main-tabs">
         <a-tab-pane key="workbench" title="工作台">
-          <Workbench />
+          <Workbench :active="activeTab === 'workbench'" />
         </a-tab-pane>
         <a-tab-pane key="tasks" title="任务管理">
-          <TaskManagement />
+          <TaskManagement :active="activeTab === 'tasks'" />
         </a-tab-pane>
-        <a-tab-pane key="pending" title="待处理">
-          <PendingTasks />
+        <a-tab-pane key="pending" title="待办">
+          <PendingTasks :active="activeTab === 'pending'" />
         </a-tab-pane>
-        <a-tab-pane key="projects" title="项目管理">
-          <ProjectManagement />
+        <a-tab-pane key="settings" title="设置">
+          <Settings />
         </a-tab-pane>
       </a-tabs>
     </a-layout-content>

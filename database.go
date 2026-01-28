@@ -92,11 +92,46 @@ func createTables() error {
 			name TEXT NOT NULL UNIQUE,
 			description TEXT DEFAULT '',
 			color TEXT DEFAULT '#165DFF',
+			archived INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("创建 projects 表失败: %v", err)
+	}
+
+	// 模型提供商表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS model_providers (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL UNIQUE,
+			label TEXT NOT NULL,
+			api_key TEXT DEFAULT '',
+			base_url TEXT DEFAULT '',
+			enabled INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 model_providers 表失败: %v", err)
+	}
+
+	// Agent表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS agents (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			prompt TEXT DEFAULT '',
+			provider_id INTEGER,
+			model TEXT DEFAULT '',
+			enabled INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (provider_id) REFERENCES model_providers(id) ON DELETE SET NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 agents 表失败: %v", err)
 	}
 
 	// 任务表
@@ -110,13 +145,46 @@ func createTables() error {
 			start_time TEXT,
 			end_time TEXT,
 			hours REAL DEFAULT 0,
+			deadline TEXT,
+			priority TEXT DEFAULT 'medium',
+			urgency TEXT DEFAULT 'medium',
 			status TEXT DEFAULT 'pending',
+			actual_start TEXT,
+			actual_hours REAL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("创建 tasks 表失败: %v", err)
+	}
+
+	// 迁移：为旧表添加新字段（如果不存在）
+	migrationColumns := []string{
+		"ALTER TABLE tasks ADD COLUMN deadline TEXT",
+		"ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'medium'",
+		"ALTER TABLE tasks ADD COLUMN urgency TEXT DEFAULT 'medium'",
+		"ALTER TABLE tasks ADD COLUMN actual_start TEXT",
+		"ALTER TABLE tasks ADD COLUMN actual_hours REAL DEFAULT 0",
+		"ALTER TABLE projects ADD COLUMN archived INTEGER DEFAULT 0",
+	}
+	for _, sql := range migrationColumns {
+		db.Exec(sql) // 忽略错误，因为列可能已存在
+	}
+
+	// 初始化默认模型提供商
+	defaultProviders := []struct {
+		name    string
+		label   string
+		baseURL string
+	}{
+		{"deepseek", "DeepSeek", "https://api.deepseek.com"},
+		{"tongyi", "通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		{"volcengine", "火山引擎", "https://ark.cn-beijing.volces.com/api/v3"},
+	}
+	for _, p := range defaultProviders {
+		db.Exec(`INSERT OR IGNORE INTO model_providers (name, label, base_url) VALUES (?, ?, ?)`,
+			p.name, p.label, p.baseURL)
 	}
 
 	// 创建索引
@@ -133,6 +201,11 @@ func createTables() error {
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`)
 	if err != nil {
 		return fmt.Errorf("创建 project_id 索引失败: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline)`)
+	if err != nil {
+		return fmt.Errorf("创建 deadline 索引失败: %v", err)
 	}
 
 	return nil
