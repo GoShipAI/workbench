@@ -54,6 +54,10 @@ export function GetAllProjects() {
   return window['go']['main']['App']['GetAllProjects']();
 }
 
+export function GetDailyTaskStats(arg1, arg2) {
+  return window['go']['main']['App']['GetDailyTaskStats'](arg1, arg2);
+}
+
 export function GetEnabledAgents() {
   return window['go']['main']['App']['GetEnabledAgents']();
 }
@@ -74,8 +78,16 @@ export function GetPendingTasks() {
   return window['go']['main']['App']['GetPendingTasks']();
 }
 
+export function GetProjectTimeStats(arg1, arg2) {
+  return window['go']['main']['App']['GetProjectTimeStats'](arg1, arg2);
+}
+
 export function GetProjects() {
   return window['go']['main']['App']['GetProjects']();
+}
+
+export function GetReportData(arg1, arg2) {
+  return window['go']['main']['App']['GetReportData'](arg1, arg2);
 }
 
 export function GetTasksByDate(arg1) {

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import Workbench from './components/Workbench.vue'
 import TaskManagement from './components/TaskManagement.vue'
 import PendingTasks from './components/PendingTasks.vue'
+import Report from './components/Report.vue'
 import Settings from './components/Settings.vue'
 
 const activeTab = ref('workbench')
@@ -32,6 +33,9 @@ onMounted(() => {
         </a-tab-pane>
         <a-tab-pane key="pending" title="待办">
           <PendingTasks :active="activeTab === 'pending'" />
+        </a-tab-pane>
+        <a-tab-pane key="report" title="报表">
+          <Report :active="activeTab === 'report'" />
         </a-tab-pane>
         <a-tab-pane key="settings" title="设置">
           <Settings />

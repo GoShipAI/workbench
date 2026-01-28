@@ -138,3 +138,37 @@ const (
 	UrgencyMedium = "medium" // 中
 	UrgencyLow    = "low"    // 低
 )
+
+// ProjectTimeStats 项目时间统计
+type ProjectTimeStats struct {
+	ProjectID   int64   `json:"project_id"`
+	ProjectName string  `json:"project_name"`
+	Color       string  `json:"color"`
+	TotalHours  float64 `json:"total_hours"` // 总工时
+	TaskCount   int     `json:"task_count"`  // 任务数量
+	Percentage  float64 `json:"percentage"`  // 占比百分比
+}
+
+// DailyTaskStats 每日任务统计
+type DailyTaskStats struct {
+	Date           string  `json:"date"`            // 日期 YYYY-MM-DD
+	TotalCount     int     `json:"total_count"`     // 总任务数
+	CompletedCount int     `json:"completed_count"` // 完成数量
+	CompletionRate float64 `json:"completion_rate"` // 完成率 (0-100)
+}
+
+// ReportSummary 报表汇总
+type ReportSummary struct {
+	TotalTasks     int     `json:"total_tasks"`     // 总任务数
+	CompletedTasks int     `json:"completed_tasks"` // 已完成任务数
+	TotalHours     float64 `json:"total_hours"`     // 总工时
+	CompletedHours float64 `json:"completed_hours"` // 已完成工时
+	AverageRate    float64 `json:"average_rate"`    // 平均完成率
+}
+
+// ReportData 报表数据汇总
+type ReportData struct {
+	ProjectStats []ProjectTimeStats `json:"project_stats"` // 项目时间统计
+	DailyStats   []DailyTaskStats   `json:"daily_stats"`   // 每日任务统计
+	Summary      ReportSummary      `json:"summary"`       // 汇总数据
+}

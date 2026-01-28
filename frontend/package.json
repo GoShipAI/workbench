@@ -11,7 +11,9 @@
   "dependencies": {
     "@arco-design/web-vue": "^2.57.0",
     "dayjs": "^1.11.19",
-    "vue": "^3.2.37"
+    "echarts": "^6.0.0",
+    "vue": "^3.2.37",
+    "vue-echarts": "^8.0.1"
   },
   "devDependencies": {
     "@babel/types": "^7.18.10",
