@@ -4,7 +4,7 @@ import { ref, computed, onMounted, watch, defineProps } from 'vue'
 const props = defineProps<{
   active: boolean
 }>()
-import { GetWorkbenchData, GetProjects, CreateTask, CompleteTask, GetPendingTasks, AssignTaskToDate } from '../../wailsjs/go/main/App'
+import { GetWorkbenchData, GetProjects, CreateTask, CompleteTask, GetPendingTasks, AssignTaskToDate, GetTasksByDate } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { Message } from '@arco-design/web-vue'
 import dayjs from 'dayjs'
@@ -30,6 +30,10 @@ const data = ref<main.WorkbenchData>(new main.WorkbenchData({
   completed_hours: 0,
   pending_count: 0
 }))
+
+// 视图切换: today=今日任务, tomorrow=明日待办
+const viewMode = ref<'today' | 'tomorrow'>('today')
+const tomorrowTasks = ref<main.Task[]>([])
 
 const projects = ref<main.Project[]>([])
 const taskModalVisible = ref(false)
@@ -135,6 +139,29 @@ const loadData = async () => {
     Message.error('加载数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+const loadTomorrowTasks = async () => {
+  loading.value = true
+  try {
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD')
+    const result = await GetTasksByDate(tomorrow)
+    tomorrowTasks.value = result || []
+  } catch (err) {
+    console.error('加载明日任务失败:', err)
+    Message.error('加载明日任务失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const switchView = (mode: 'today' | 'tomorrow') => {
+  viewMode.value = mode
+  if (mode === 'today') {
+    loadData()
+  } else {
+    loadTomorrowTasks()
   }
 }
 
@@ -436,52 +463,99 @@ onMounted(() => {
           </a-alert>
         </a-col>
 
-        <!-- 右侧：今日任务列表 -->
+        <!-- 右侧：任务列表 -->
         <a-col :span="18">
-          <a-card title="今日任务" class="tasks-card">
+          <a-card class="tasks-card">
+            <template #title>
+              <div class="card-title-tabs">
+                <span
+                  class="tab-item"
+                  :class="{ active: viewMode === 'today' }"
+                  @click="switchView('today')"
+                >今日任务</span>
+                <span
+                  class="tab-item"
+                  :class="{ active: viewMode === 'tomorrow' }"
+                  @click="switchView('tomorrow')"
+                >明日待办</span>
+              </div>
+            </template>
             <template #extra>
-              <a-button type="text" @click="loadData">
+              <a-button type="text" @click="viewMode === 'today' ? loadData() : loadTomorrowTasks()">
                 <template #icon><icon-refresh /></template>
                 刷新
               </a-button>
             </template>
 
-            <a-empty v-if="!data.today_tasks || data.today_tasks.length === 0" description="今日暂无任务" />
+            <!-- 今日任务视图 -->
+            <template v-if="viewMode === 'today'">
+              <a-empty v-if="!data.today_tasks || data.today_tasks.length === 0" description="今日暂无任务" />
 
-            <div v-else class="task-list">
-              <div v-for="task in data.today_tasks" :key="task.id" class="task-card">
-                <div class="task-content" @click="openDetailModal(task)">
-                  <div class="task-header">
-                    <span class="task-name" :class="{ 'completed': task.status === 'completed' }">
-                      {{ task.name }}
-                    </span>
-                    <span class="task-tags">
-                      <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
-                      <a-tag :color="getStatusColor(task.status)" size="small">
-                        {{ getStatusText(task.status) }}
-                      </a-tag>
-                    </span>
+              <div v-else class="task-list">
+                <div v-for="task in data.today_tasks" :key="task.id" class="task-card">
+                  <div class="task-content" @click="openDetailModal(task)">
+                    <div class="task-header">
+                      <span class="task-name" :class="{ 'completed': task.status === 'completed' }">
+                        {{ task.name }}
+                      </span>
+                      <span class="task-tags">
+                        <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                        <a-tag :color="getStatusColor(task.status)" size="small">
+                          {{ getStatusText(task.status) }}
+                        </a-tag>
+                      </span>
+                    </div>
+                    <div class="task-meta">
+                      <span v-if="task.start_time" class="meta-item">
+                        {{ task.start_time }}
+                        <span v-if="task.end_time"> - {{ task.end_time }}</span>
+                      </span>
+                      <span v-if="task.hours" class="meta-item hours">{{ task.hours }}h</span>
+                    </div>
                   </div>
-                  <div class="task-meta">
-                    <span v-if="task.start_time" class="meta-item">
-                      {{ task.start_time }}
-                      <span v-if="task.end_time"> - {{ task.end_time }}</span>
-                    </span>
-                    <span v-if="task.hours" class="meta-item hours">{{ task.hours }}h</span>
+                  <div class="task-actions">
+                    <a-button
+                      v-if="task.status !== 'completed'"
+                      type="primary"
+                      size="small"
+                      @click.stop="openCompleteModal(task)"
+                    >
+                      完成
+                    </a-button>
                   </div>
-                </div>
-                <div class="task-actions">
-                  <a-button
-                    v-if="task.status !== 'completed'"
-                    type="primary"
-                    size="small"
-                    @click.stop="openCompleteModal(task)"
-                  >
-                    完成
-                  </a-button>
                 </div>
               </div>
-            </div>
+            </template>
+
+            <!-- 明日待办视图（只读） -->
+            <template v-else>
+              <a-empty v-if="tomorrowTasks.length === 0" description="明日暂无安排" />
+
+              <div v-else class="task-list">
+                <div v-for="task in tomorrowTasks" :key="task.id" class="task-card readonly">
+                  <div class="task-content">
+                    <div class="task-header">
+                      <span class="task-name" :class="{ 'completed': task.status === 'completed' }">
+                        {{ task.name }}
+                      </span>
+                      <span class="task-tags">
+                        <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                        <a-tag :color="getStatusColor(task.status)" size="small">
+                          {{ getStatusText(task.status) }}
+                        </a-tag>
+                      </span>
+                    </div>
+                    <div class="task-meta">
+                      <span v-if="task.start_time" class="meta-item">
+                        {{ task.start_time }}
+                        <span v-if="task.end_time"> - {{ task.end_time }}</span>
+                      </span>
+                      <span v-if="task.hours" class="meta-item hours">{{ task.hours }}h</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </a-card>
         </a-col>
       </a-row>
@@ -865,6 +939,37 @@ onMounted(() => {
   background: #2a2a2b;
   height: 100%;
   min-height: 520px;
+}
+
+.card-title-tabs {
+  display: flex;
+  gap: 20px;
+}
+
+.tab-item {
+  cursor: pointer;
+  color: #86909c;
+  font-weight: 500;
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-item:hover {
+  color: #c9cdd4;
+}
+
+.tab-item.active {
+  color: #165DFF;
+  border-bottom-color: #165DFF;
+}
+
+.task-card.readonly {
+  cursor: default;
+}
+
+.task-card.readonly .task-content {
+  cursor: default;
 }
 
 .tasks-card :deep(.arco-card-body) {
