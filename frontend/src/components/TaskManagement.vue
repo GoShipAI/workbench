@@ -82,10 +82,10 @@ const currentTask = ref<main.Task | null>(null)
 // 筛选后的任务列表
 const filteredTasks = computed(() => {
   let result = tasks.value
-  if (filterProjectId.value !== undefined) {
+  if (filterProjectId.value) {
     result = result.filter(t => t.project_id === filterProjectId.value)
   }
-  if (filterStatus.value !== undefined) {
+  if (filterStatus.value) {
     result = result.filter(t => t.status === filterStatus.value)
   }
   return result
