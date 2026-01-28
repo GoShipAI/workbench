@@ -10,7 +10,7 @@ import {
   GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { GetReportData } from '../../wailsjs/go/main/App'
+import { GetReportData, GetProjects } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { Message } from '@arco-design/web-vue'
 import dayjs from 'dayjs'
@@ -38,6 +38,8 @@ const dateRange = ref<string[]>([
   dayjs().format('YYYY-MM-DD')
 ])
 const reportData = ref<main.ReportData | null>(null)
+const projects = ref<main.Project[]>([])
+const selectedProjectIds = ref<number[]>([])
 
 // 快捷日期范围
 const quickRanges = [
@@ -179,11 +181,20 @@ const barChartOption = computed(() => {
   }
 })
 
+// 加载项目列表
+const loadProjects = async () => {
+  try {
+    projects.value = await GetProjects()
+  } catch (err) {
+    console.error('加载项目列表失败:', err)
+  }
+}
+
 // 加载数据
 const loadData = async () => {
   loading.value = true
   try {
-    const result = await GetReportData(dateRange.value[0], dateRange.value[1])
+    const result = await GetReportData(dateRange.value[0], dateRange.value[1], selectedProjectIds.value)
     reportData.value = result
   } catch (err) {
     console.error('加载报表数据失败:', err)
@@ -213,15 +224,22 @@ watch(dateRange, () => {
   loadData()
 })
 
+// 监听项目筛选变化
+watch(selectedProjectIds, () => {
+  loadData()
+})
+
 // 监听 tab 激活
 watch(() => props.active, (isActive) => {
   if (isActive) {
+    loadProjects()
     loadData()
   }
 })
 
 onMounted(() => {
   if (props.active) {
+    loadProjects()
     loadData()
   }
 })
@@ -237,6 +255,23 @@ onMounted(() => {
           style="width: 260px"
           :allow-clear="false"
         />
+        <a-select
+          v-model="selectedProjectIds"
+          multiple
+          placeholder="全部项目"
+          style="width: 200px"
+          allow-clear
+          :max-tag-count="2"
+        >
+          <a-option :value="0">未分类</a-option>
+          <a-option
+            v-for="project in projects"
+            :key="project.id"
+            :value="project.id"
+          >
+            <span :style="{ color: project.color }">{{ project.name }}</span>
+          </a-option>
+        </a-select>
         <div class="quick-ranges">
           <a-tag
             v-for="range in quickRanges"

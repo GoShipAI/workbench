@@ -28,7 +28,7 @@ export function GetAgents():Promise<Array<main.Agent>>;
 
 export function GetAllProjects():Promise<Array<main.Project>>;
 
-export function GetDailyTaskStats(arg1:string,arg2:string):Promise<Array<main.DailyTaskStats>>;
+export function GetDailyTaskStats(arg1:string,arg2:string,arg3:Array<number>):Promise<Array<main.DailyTaskStats>>;
 
 export function GetEnabledAgents():Promise<Array<main.Agent>>;
 
@@ -40,11 +40,11 @@ export function GetModelProviders():Promise<Array<main.ModelProvider>>;
 
 export function GetPendingTasks():Promise<Array<main.Task>>;
 
-export function GetProjectTimeStats(arg1:string,arg2:string):Promise<Array<main.ProjectTimeStats>>;
+export function GetProjectTimeStats(arg1:string,arg2:string,arg3:Array<number>):Promise<Array<main.ProjectTimeStats>>;
 
 export function GetProjects():Promise<Array<main.Project>>;
 
-export function GetReportData(arg1:string,arg2:string):Promise<main.ReportData>;
+export function GetReportData(arg1:string,arg2:string,arg3:Array<number>):Promise<main.ReportData>;
 
 export function GetTasksByDate(arg1:string):Promise<Array<main.Task>>;
 

@@ -3,15 +3,34 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
+// buildProjectFilter 构建项目筛选条件
+func buildProjectFilter(projectIDs []int64) (string, []interface{}) {
+	if len(projectIDs) == 0 {
+		return "", nil
+	}
+
+	placeholders := make([]string, len(projectIDs))
+	args := make([]interface{}, len(projectIDs))
+	for i, id := range projectIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	return fmt.Sprintf(" AND COALESCE(t.project_id, 0) IN (%s)", strings.Join(placeholders, ",")), args
+}
+
 // GetProjectTimeStats 获取项目时间占比统计
-func (a *App) GetProjectTimeStats(startDate, endDate string) ([]ProjectTimeStats, error) {
+func (a *App) GetProjectTimeStats(startDate, endDate string, projectIDs []int64) ([]ProjectTimeStats, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	rows, err := db.Query(`
+	projectFilter, filterArgs := buildProjectFilter(projectIDs)
+
+	query := fmt.Sprintf(`
 		SELECT
 			COALESCE(t.project_id, 0) as project_id,
 			COALESCE(p.name, '未分类') as project_name,
@@ -21,10 +40,15 @@ func (a *App) GetProjectTimeStats(startDate, endDate string) ([]ProjectTimeStats
 			COUNT(*) as task_count
 		FROM tasks t
 		LEFT JOIN projects p ON t.project_id = p.id
-		WHERE t.date >= ? AND t.date <= ?
+		WHERE t.date >= ? AND t.date <= ?%s
 		GROUP BY COALESCE(t.project_id, 0)
 		ORDER BY total_hours DESC
-	`, startDate, endDate)
+	`, projectFilter)
+
+	args := []interface{}{startDate, endDate}
+	args = append(args, filterArgs...)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		log.Printf("查询项目时间统计失败: %v", err)
 		return nil, fmt.Errorf("查询项目时间统计失败: %v", err)
@@ -55,21 +79,30 @@ func (a *App) GetProjectTimeStats(startDate, endDate string) ([]ProjectTimeStats
 }
 
 // GetDailyTaskStats 获取每日任务统计
-func (a *App) GetDailyTaskStats(startDate, endDate string) ([]DailyTaskStats, error) {
+func (a *App) GetDailyTaskStats(startDate, endDate string, projectIDs []int64) ([]DailyTaskStats, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	rows, err := db.Query(`
+	projectFilter, filterArgs := buildProjectFilter(projectIDs)
+	// 对于每日统计，需要调整 SQL 中的表别名
+	projectFilter = strings.ReplaceAll(projectFilter, "t.project_id", "project_id")
+
+	query := fmt.Sprintf(`
 		SELECT
 			date,
 			COUNT(*) as total_count,
 			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count
-		FROM tasks
-		WHERE date >= ? AND date <= ? AND date IS NOT NULL
+		FROM tasks t
+		WHERE date >= ? AND date <= ? AND date IS NOT NULL%s
 		GROUP BY date
 		ORDER BY date ASC
-	`, startDate, endDate)
+	`, projectFilter)
+
+	args := []interface{}{startDate, endDate}
+	args = append(args, filterArgs...)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		log.Printf("查询每日任务统计失败: %v", err)
 		return nil, fmt.Errorf("查询每日任务统计失败: %v", err)
@@ -93,13 +126,13 @@ func (a *App) GetDailyTaskStats(startDate, endDate string) ([]DailyTaskStats, er
 }
 
 // GetReportData 获取完整报表数据
-func (a *App) GetReportData(startDate, endDate string) (*ReportData, error) {
-	projectStats, err := a.GetProjectTimeStats(startDate, endDate)
+func (a *App) GetReportData(startDate, endDate string, projectIDs []int64) (*ReportData, error) {
+	projectStats, err := a.GetProjectTimeStats(startDate, endDate, projectIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	dailyStats, err := a.GetDailyTaskStats(startDate, endDate)
+	dailyStats, err := a.GetDailyTaskStats(startDate, endDate, projectIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -120,11 +153,19 @@ func (a *App) GetReportData(startDate, endDate string) (*ReportData, error) {
 
 	// 查询已完成工时
 	if db != nil {
-		db.QueryRow(`
+		projectFilter, filterArgs := buildProjectFilter(projectIDs)
+		projectFilter = strings.ReplaceAll(projectFilter, "t.project_id", "project_id")
+
+		query := fmt.Sprintf(`
 			SELECT COALESCE(SUM(CASE WHEN actual_hours > 0 THEN actual_hours ELSE hours END), 0)
 			FROM tasks
-			WHERE date >= ? AND date <= ? AND status = 'completed'
-		`, startDate, endDate).Scan(&summary.CompletedHours)
+			WHERE date >= ? AND date <= ? AND status = 'completed'%s
+		`, projectFilter)
+
+		args := []interface{}{startDate, endDate}
+		args = append(args, filterArgs...)
+
+		db.QueryRow(query, args...).Scan(&summary.CompletedHours)
 	}
 
 	if len(dailyStats) > 0 {
