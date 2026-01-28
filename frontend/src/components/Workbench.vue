@@ -111,15 +111,17 @@ const completionRate = computed(() => {
   const total = data.value.total_count ?? 0
   const completed = data.value.completed_count ?? 0
   if (total === 0) return 0
-  return Math.min(completed / total, 1)
+  return Math.min(Math.round((completed / total) * 100), 100)
 })
 
 const hoursRate = computed(() => {
   const planned = data.value.planned_hours ?? 0
   const completed = data.value.completed_hours ?? 0
   if (planned === 0) return 0
-  return Math.min(completed / planned, 1)
+  return Math.min(Math.round((completed / planned) * 100), 100)
 })
+
+const formatPercent = (percent: number) => `${percent}%`
 
 const loadData = async () => {
   loading.value = true
@@ -414,11 +416,17 @@ onMounted(() => {
           <a-card class="progress-card">
             <div class="progress-item">
               <div class="progress-title">任务完成进度</div>
-              <a-progress :percent="completionRate" :stroke-width="10" />
+              <div class="progress-row">
+                <a-progress :percent="completionRate / 100" :stroke-width="10" :show-text="false" />
+                <span class="progress-text">{{ completionRate }}%</span>
+              </div>
             </div>
             <div class="progress-item">
               <div class="progress-title">工时完成进度</div>
-              <a-progress :percent="hoursRate" :stroke-width="10" color="#00B42A" />
+              <div class="progress-row">
+                <a-progress :percent="hoursRate / 100" :stroke-width="10" color="#00B42A" :show-text="false" />
+                <span class="progress-text">{{ hoursRate }}%</span>
+              </div>
             </div>
           </a-card>
 
@@ -829,6 +837,24 @@ onMounted(() => {
   margin-bottom: 8px;
   color: #86909c;
   font-size: 13px;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-row :deep(.arco-progress) {
+  flex: 1;
+}
+
+.progress-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #c9cdd4;
+  min-width: 40px;
+  text-align: right;
 }
 
 .pending-alert {
