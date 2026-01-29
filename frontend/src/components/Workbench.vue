@@ -79,6 +79,8 @@ const selectedTaskIds = ref<number[]>([])
 const planLoading = ref(false)
 const newTaskName = ref('')
 const newTaskHours = ref(0)
+const planDateTasks = ref<main.Task[]>([])
+const loadingPlanDateTasks = ref(false)
 
 const openDetailModal = (task: main.Task) => {
   viewTask.value = task
@@ -288,6 +290,32 @@ const handleTodoSubmit = async () => {
   }
 }
 
+// 加载指定日期已有任务
+const loadPlanDateTasks = async (date: string) => {
+  loadingPlanDateTasks.value = true
+  try {
+    const result = await GetTasksByDate(date)
+    planDateTasks.value = result || []
+  } catch (err) {
+    console.error('加载日期任务失败:', err)
+    planDateTasks.value = []
+  } finally {
+    loadingPlanDateTasks.value = false
+  }
+}
+
+// 选定日期的工时统计
+const planDateTasksStats = computed(() => {
+  const tasks = planDateTasks.value
+  const totalHours = tasks.reduce((sum, t) => sum + (t.hours || 0), 0)
+  const completedCount = tasks.filter(t => t.status === 'completed').length
+  return {
+    count: tasks.length,
+    totalHours,
+    completedCount
+  }
+})
+
 // 打开规划面板
 const openPlanModal = async () => {
   planDate.value = dayjs().format('YYYY-MM-DD')
@@ -298,8 +326,11 @@ const openPlanModal = async () => {
   planModalVisible.value = true
 
   try {
-    const result = await GetPendingTasks()
-    pendingTasks.value = result || []
+    const [pendingResult] = await Promise.all([
+      GetPendingTasks(),
+      loadPlanDateTasks(planDate.value)
+    ])
+    pendingTasks.value = pendingResult || []
   } catch (err) {
     console.error('加载待办任务失败:', err)
     Message.error('加载待办任务失败')
@@ -307,6 +338,13 @@ const openPlanModal = async () => {
     planLoading.value = false
   }
 }
+
+// 监听规划日期变化
+watch(planDate, async (newDate) => {
+  if (planModalVisible.value && newDate) {
+    await loadPlanDateTasks(newDate)
+  }
+})
 
 // 切换任务选中状态
 const toggleTaskSelection = (taskId: number) => {
@@ -340,6 +378,8 @@ const addQuickTask = async () => {
     Message.success('任务已添加')
     newTaskName.value = ''
     newTaskHours.value = 0
+    // 刷新已安排任务列表
+    await loadPlanDateTasks(planDate.value)
   } catch (err) {
     console.error('创建任务失败:', err)
     Message.error('创建失败')
@@ -763,89 +803,131 @@ onMounted(() => {
     <a-modal
       v-model:visible="planModalVisible"
       title="规划日程"
-      :width="560"
+      :width="900"
       :footer="false"
       @cancel="planModalVisible = false"
     >
       <a-spin :loading="planLoading">
         <div class="plan-modal-content">
-          <!-- 日期选择 -->
-          <div class="plan-date-section">
-            <div class="section-label">选择日期</div>
-            <a-date-picker
-              v-model="planDate"
-              style="width: 100%"
-              :allow-clear="false"
-            />
-            <div class="quick-dates">
-              <a-tag
-                :color="planDate === dayjs().format('YYYY-MM-DD') ? 'arcoblue' : ''"
-                @click="planDate = dayjs().format('YYYY-MM-DD')"
-                class="quick-date-tag"
-              >今天</a-tag>
-              <a-tag
-                :color="planDate === dayjs().add(1, 'day').format('YYYY-MM-DD') ? 'arcoblue' : ''"
-                @click="planDate = dayjs().add(1, 'day').format('YYYY-MM-DD')"
-                class="quick-date-tag"
-              >明天</a-tag>
-              <a-tag
-                :color="planDate === dayjs().add(2, 'day').format('YYYY-MM-DD') ? 'arcoblue' : ''"
-                @click="planDate = dayjs().add(2, 'day').format('YYYY-MM-DD')"
-                class="quick-date-tag"
-              >后天</a-tag>
-            </div>
-          </div>
+          <div class="plan-layout">
+            <!-- 左侧：日期选择和待办 -->
+            <div class="plan-left">
+              <!-- 日期选择 -->
+              <div class="plan-date-section">
+                <div class="section-label">选择日期</div>
+                <a-date-picker
+                  v-model="planDate"
+                  style="width: 100%"
+                  :allow-clear="false"
+                />
+                <div class="quick-dates">
+                  <a-tag
+                    :color="planDate === dayjs().format('YYYY-MM-DD') ? 'arcoblue' : ''"
+                    @click="planDate = dayjs().format('YYYY-MM-DD')"
+                    class="quick-date-tag"
+                  >今天</a-tag>
+                  <a-tag
+                    :color="planDate === dayjs().add(1, 'day').format('YYYY-MM-DD') ? 'arcoblue' : ''"
+                    @click="planDate = dayjs().add(1, 'day').format('YYYY-MM-DD')"
+                    class="quick-date-tag"
+                  >明天</a-tag>
+                  <a-tag
+                    :color="planDate === dayjs().add(2, 'day').format('YYYY-MM-DD') ? 'arcoblue' : ''"
+                    @click="planDate = dayjs().add(2, 'day').format('YYYY-MM-DD')"
+                    class="quick-date-tag"
+                  >后天</a-tag>
+                </div>
+              </div>
 
-          <!-- 快速添加新任务 -->
-          <div class="plan-quick-add">
-            <div class="section-label">快速添加新任务</div>
-            <div class="quick-add-row">
-              <a-input
-                v-model="newTaskName"
-                placeholder="输入任务名称"
-                style="flex: 1"
-                @keyup.enter="addQuickTask"
-              />
-              <a-input-number
-                v-model="newTaskHours"
-                :min="0"
-                :max="24"
-                :step="0.5"
-                :precision="1"
-                placeholder="工时"
-                style="width: 90px"
-              />
-              <a-button type="primary" @click="addQuickTask">
-                <icon-plus />
-              </a-button>
-            </div>
-          </div>
+              <!-- 快速添加新任务 -->
+              <div class="plan-quick-add">
+                <div class="section-label">快速添加新任务</div>
+                <div class="quick-add-row">
+                  <a-input
+                    v-model="newTaskName"
+                    placeholder="输入任务名称"
+                    style="flex: 1"
+                    @keyup.enter="addQuickTask"
+                  />
+                  <a-input-number
+                    v-model="newTaskHours"
+                    :min="0"
+                    :max="24"
+                    :step="0.5"
+                    :precision="1"
+                    placeholder="工时"
+                    style="width: 80px"
+                  />
+                  <a-button type="primary" @click="addQuickTask">
+                    <icon-plus />
+                  </a-button>
+                </div>
+              </div>
 
-          <!-- 待办任务列表 -->
-          <div class="plan-pending-section">
-            <div class="section-label">
-              从待办中选择
-              <span class="selected-count" v-if="selectedTaskIds.length > 0">
-                已选 {{ selectedTaskIds.length }} 项
-              </span>
-            </div>
-            <a-empty v-if="pendingTasks.length === 0" description="暂无待办任务" />
-            <div v-else class="pending-task-list">
-              <div
-                v-for="task in pendingTasks"
-                :key="task.id"
-                class="pending-task-item"
-                :class="{ selected: selectedTaskIds.includes(task.id) }"
-                @click="toggleTaskSelection(task.id)"
-              >
-                <a-checkbox :model-value="selectedTaskIds.includes(task.id)" />
-                <div class="pending-task-info">
-                  <div class="pending-task-name">{{ task.name }}</div>
-                  <div class="pending-task-meta">
-                    <span v-if="task.project_name" class="task-project">{{ task.project_name }}</span>
-                    <span v-if="task.hours" class="task-hours">{{ task.hours }}h</span>
+              <!-- 待办任务列表 -->
+              <div class="plan-pending-section">
+                <div class="section-label">
+                  从待办中选择
+                  <span class="selected-count" v-if="selectedTaskIds.length > 0">
+                    已选 {{ selectedTaskIds.length }} 项
+                  </span>
+                </div>
+                <a-empty v-if="pendingTasks.length === 0" description="暂无待办任务" />
+                <div v-else class="pending-task-list">
+                  <div
+                    v-for="task in pendingTasks"
+                    :key="task.id"
+                    class="pending-task-item"
+                    :class="{ selected: selectedTaskIds.includes(task.id) }"
+                    @click="toggleTaskSelection(task.id)"
+                  >
+                    <a-checkbox :model-value="selectedTaskIds.includes(task.id)" />
+                    <div class="pending-task-info">
+                      <div class="pending-task-name">{{ task.name }}</div>
+                      <div class="pending-task-meta">
+                        <span v-if="task.project_name" class="task-project">{{ task.project_name }}</span>
+                        <span v-if="task.hours" class="task-hours">{{ task.hours }}h</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- 右侧：已安排任务 -->
+            <div class="plan-right">
+              <div class="plan-existing-section">
+                <div class="section-header">
+                  <div class="section-label">{{ planDate }} 已安排任务</div>
+                  <div class="section-stats">
+                    {{ planDateTasksStats.count }} 个任务，共 {{ planDateTasksStats.totalHours.toFixed(1) }}h
+                  </div>
+                </div>
+
+                <a-spin :loading="loadingPlanDateTasks">
+                  <div v-if="planDateTasks.length === 0" class="empty-date-tasks">
+                    该日期暂无任务安排
+                  </div>
+                  <div v-else class="existing-task-list">
+                    <div v-for="task in planDateTasks" :key="task.id" class="existing-task-item">
+                      <div class="existing-task-main">
+                        <a-tag v-if="task.status === 'completed'" size="small" color="green">已完成</a-tag>
+                        <a-tag v-else-if="task.status === 'in_progress'" size="small" color="blue">进行中</a-tag>
+                        <a-tag v-else size="small" color="orange">待开始</a-tag>
+                        <span class="existing-task-name" :class="{ completed: task.status === 'completed' }">
+                          {{ task.name }}
+                        </span>
+                      </div>
+                      <div class="existing-task-meta">
+                        <span v-if="task.start_time && task.end_time" class="time-range">
+                          {{ task.start_time }} - {{ task.end_time }}
+                        </span>
+                        <span v-if="task.hours" class="hours-badge">{{ task.hours }}h</span>
+                        <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                      </div>
+                    </div>
+                  </div>
+                </a-spin>
               </div>
             </div>
           </div>
@@ -1186,6 +1268,22 @@ onMounted(() => {
   padding: 0;
 }
 
+.plan-layout {
+  display: flex;
+  gap: 24px;
+  min-height: 400px;
+}
+
+.plan-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-right {
+  width: 360px;
+  flex-shrink: 0;
+}
+
 .section-label {
   font-size: 14px;
   font-weight: 500;
@@ -1301,7 +1399,101 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid #333;
+  width: 100%;
+}
+
+/* 已安排任务区域样式 */
+.plan-existing-section {
+  background: #1e1e1f;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-existing-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #3a3a3c;
+}
+
+.plan-existing-section .section-label {
+  margin-bottom: 0;
+}
+
+.section-stats {
+  color: #86909c;
+  font-size: 13px;
+}
+
+.empty-date-tasks {
+  text-align: center;
+  color: #86909c;
+  padding: 40px 0;
+}
+
+.existing-task-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+}
+
+.existing-task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #2a2a2b;
+  border-radius: 6px;
+}
+
+.existing-task-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.existing-task-name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.existing-task-name.completed {
+  text-decoration: line-through;
+  color: #86909c;
+}
+
+.existing-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #86909c;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.existing-task-meta .time-range {
+  color: #4080ff;
+}
+
+.existing-task-meta .hours-badge {
+  background: #3a3a3c;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>

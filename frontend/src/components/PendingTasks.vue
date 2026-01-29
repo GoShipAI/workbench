@@ -10,7 +10,8 @@ import {
   CreateTask,
   UpdateTask,
   DeleteTask,
-  AssignTaskToDate
+  AssignTaskToDate,
+  GetTasksByDate
 } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { Message } from '@arco-design/web-vue'
@@ -35,6 +36,8 @@ const assignModalVisible = ref(false)
 const isEditing = ref(false)
 const selectedTask = ref<main.Task | null>(null)
 const assignDate = ref(dayjs().format('YYYY-MM-DD'))
+const dateTasks = ref<main.Task[]>([])
+const loadingDateTasks = ref(false)
 
 // 筛选条件
 const filterProjectId = ref<number | undefined>(undefined)
@@ -71,6 +74,18 @@ const filteredTasks = computed(() => {
     result = result.filter(t => t.project_id === filterProjectId.value)
   }
   return result
+})
+
+// 选定日期的工时统计
+const dateTasksStats = computed(() => {
+  const tasks = dateTasks.value
+  const totalHours = tasks.reduce((sum, t) => sum + (t.hours || 0), 0)
+  const completedCount = tasks.filter(t => t.status === 'completed').length
+  return {
+    count: tasks.length,
+    totalHours,
+    completedCount
+  }
 })
 
 const loadTasks = async () => {
@@ -118,11 +133,32 @@ const openEditModal = async (task: main.Task) => {
   modalVisible.value = true
 }
 
-const openAssignModal = (task: main.Task) => {
+const loadDateTasks = async (date: string) => {
+  loadingDateTasks.value = true
+  try {
+    const result = await GetTasksByDate(date)
+    dateTasks.value = result || []
+  } catch (err) {
+    console.error('加载日期任务失败:', err)
+    dateTasks.value = []
+  } finally {
+    loadingDateTasks.value = false
+  }
+}
+
+const openAssignModal = async (task: main.Task) => {
   selectedTask.value = task
   assignDate.value = dayjs().format('YYYY-MM-DD')
   assignModalVisible.value = true
+  await loadDateTasks(assignDate.value)
 }
+
+// 监听分配日期变化，加载该日期的任务
+watch(assignDate, async (newDate) => {
+  if (assignModalVisible.value && newDate) {
+    await loadDateTasks(newDate)
+  }
+})
 
 const handleSubmit = async () => {
   if (!form.value.name.trim()) {
@@ -355,22 +391,65 @@ onMounted(() => {
     <!-- 分配日期弹窗 -->
     <a-modal
       v-model:visible="assignModalVisible"
-      title="分配日期"
+      title="规划日程"
       @ok="handleAssign"
       @cancel="assignModalVisible = false"
+      :width="640"
     >
-      <a-form layout="vertical">
-        <a-form-item label="选择日期">
+      <div class="assign-modal-content">
+        <!-- 当前任务信息 -->
+        <a-alert v-if="selectedTask" type="info" class="current-task-alert">
+          <template #title>待规划任务</template>
+          <div class="current-task-info">
+            <span class="task-name">{{ selectedTask.name }}</span>
+            <span v-if="selectedTask.hours" class="task-hours">预计 {{ selectedTask.hours }}h</span>
+          </div>
+        </a-alert>
+
+        <!-- 日期选择 -->
+        <div class="date-picker-row">
+          <span class="date-label">选择日期</span>
           <a-date-picker
             v-model="assignDate"
-            style="width: 100%"
+            style="width: 200px"
             :allow-clear="false"
           />
-        </a-form-item>
-        <a-alert v-if="selectedTask" type="info">
-          任务「{{ selectedTask.name }}」将被分配到选定日期
-        </a-alert>
-      </a-form>
+        </div>
+
+        <!-- 当天已安排任务 -->
+        <div class="date-tasks-section">
+          <div class="section-header">
+            <span class="section-title">{{ assignDate }} 已安排任务</span>
+            <span class="section-stats">
+              {{ dateTasksStats.count }} 个任务，共 {{ dateTasksStats.totalHours.toFixed(1) }}h
+            </span>
+          </div>
+
+          <a-spin :loading="loadingDateTasks">
+            <div v-if="dateTasks.length === 0" class="empty-date-tasks">
+              该日期暂无任务安排
+            </div>
+            <div v-else class="date-tasks-list">
+              <div v-for="task in dateTasks" :key="task.id" class="date-task-item">
+                <div class="date-task-main">
+                  <a-tag v-if="task.status === 'completed'" size="small" color="green">已完成</a-tag>
+                  <a-tag v-else-if="task.status === 'in_progress'" size="small" color="blue">进行中</a-tag>
+                  <span class="date-task-name" :class="{ completed: task.status === 'completed' }">
+                    {{ task.name }}
+                  </span>
+                </div>
+                <div class="date-task-meta">
+                  <span v-if="task.start_time && task.end_time" class="time-range">
+                    {{ task.start_time }} - {{ task.end_time }}
+                  </span>
+                  <span v-if="task.hours" class="hours">{{ task.hours }}h</span>
+                  <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                </div>
+              </div>
+            </div>
+          </a-spin>
+        </div>
+      </div>
     </a-modal>
   </div>
 </template>
@@ -489,5 +568,140 @@ onMounted(() => {
 .overdue-icon {
   margin-left: 4px;
   color: #F53F3F;
+}
+
+/* 分配日期弹窗样式 */
+.assign-modal-content {
+  min-height: 300px;
+  width: 100%;
+}
+
+.current-task-alert {
+  margin-bottom: 16px;
+}
+
+.date-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.date-label {
+  font-size: 14px;
+  color: #c9cdd4;
+}
+
+.current-task-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.current-task-info .task-name {
+  font-weight: 500;
+}
+
+.current-task-info .task-hours {
+  color: #86909c;
+  font-size: 13px;
+}
+
+.date-tasks-section {
+  margin-top: 0;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  padding: 16px;
+  background: #1e1e1f;
+}
+
+.date-tasks-section :deep(.arco-spin),
+.date-tasks-section :deep(.arco-spin-children) {
+  width: 100% !important;
+  display: block !important;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3a3a3c;
+}
+
+.section-title {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.section-stats {
+  color: #86909c;
+  font-size: 13px;
+}
+
+.empty-date-tasks {
+  text-align: center;
+  color: #86909c;
+  padding: 24px 0;
+}
+
+.date-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.date-task-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: #2a2a2b;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 12px;
+}
+
+.date-task-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.date-task-name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-task-name.completed {
+  text-decoration: line-through;
+  color: #86909c;
+}
+
+.date-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #86909c;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.date-task-meta .time-range {
+  color: #4080ff;
+}
+
+.date-task-meta .hours {
+  background: #3a3a3c;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>
