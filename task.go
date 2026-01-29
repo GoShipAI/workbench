@@ -44,7 +44,10 @@ func (a *App) GetTasksByDate(date string) ([]Task, error) {
 
 	rows, err := db.Query(taskSelectSQL+`
 		WHERE t.date = ?
-		ORDER BY t.start_time, t.created_at
+		ORDER BY
+			CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END,
+			t.start_time NULLS LAST,
+			t.created_at
 	`, date)
 	if err != nil {
 		log.Printf("查询任务失败: %v", err)
