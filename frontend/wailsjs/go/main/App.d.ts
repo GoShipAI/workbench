@@ -28,6 +28,10 @@ export function GetAgents():Promise<Array<main.Agent>>;
 
 export function GetAllProjects():Promise<Array<main.Project>>;
 
+export function GetConversationDetail(arg1:number):Promise<main.ConversationDetail>;
+
+export function GetConversationSteps(arg1:number):Promise<Array<main.AgentStep>>;
+
 export function GetDailyTaskStats(arg1:string,arg2:string,arg3:Array<number>):Promise<Array<main.DailyTaskStats>>;
 
 export function GetEnabledAgents():Promise<Array<main.Agent>>;
@@ -46,11 +50,21 @@ export function GetProjects():Promise<Array<main.Project>>;
 
 export function GetReportData(arg1:string,arg2:string,arg3:Array<number>):Promise<main.ReportData>;
 
+export function GetTask(arg1:number):Promise<main.Task>;
+
+export function GetTaskConversations(arg1:number):Promise<Array<main.TaskConversation>>;
+
 export function GetTasksByDate(arg1:string):Promise<Array<main.Task>>;
 
 export function GetTasksByDateRange(arg1:string,arg2:string):Promise<Array<main.Task>>;
 
 export function GetWorkbenchData():Promise<main.WorkbenchData>;
+
+export function SendMessage(arg1:main.SendMessageInput):Promise<main.ConversationDetail>;
+
+export function StartConversation(arg1:main.StartConversationInput):Promise<main.ConversationDetail>;
+
+export function StopConversation(arg1:number):Promise<void>;
 
 export function UpdateAgent(arg1:main.AgentInput):Promise<void>;
 

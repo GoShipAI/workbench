@@ -24,17 +24,62 @@ type ModelProvider struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Agent AI助手
+// Agent AI助手/执行器
 type Agent struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`        // Agent名称
 	Description string    `json:"description"` // 描述
+	Type        string    `json:"type"`        // 类型: planner/executor
 	Prompt      string    `json:"prompt"`      // 系统提示词
 	ProviderID  *int64    `json:"provider_id"` // 关联的模型提供商
 	Model       string    `json:"model"`       // 模型名称
+	Tools       string    `json:"tools"`       // 可用工具列表 JSON ["claude_code", "shell"]
+	WorkingDir  string    `json:"working_dir"` // 默认工作目录
+	MaxRetries  int       `json:"max_retries"` // 最大重试次数
 	Enabled     bool      `json:"enabled"`     // 是否启用
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// AgentTool 工具定义
+type AgentTool struct {
+	Name        string `json:"name"`        // 工具名称
+	Description string `json:"description"` // 描述（给LLM看）
+	Type        string `json:"type"`        // 类型: cli/builtin
+	Schema      string `json:"schema"`      // 参数 JSON Schema
+}
+
+// AgentStep 执行步骤
+type AgentStep struct {
+	ID             int64     `json:"id"`
+	ConversationID int64     `json:"conversation_id"`
+	StepNum        int       `json:"step_num"`
+	Thought        string    `json:"thought"`      // AI的思考
+	Action         string    `json:"action"`       // 选择的工具
+	ActionInput    string    `json:"action_input"` // 工具输入 JSON
+	Observation    string    `json:"observation"`  // 执行结果
+	Status         string    `json:"status"`       // pending/running/success/failed
+	Error          string    `json:"error"`        // 错误信息
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// 步骤状态常量
+const (
+	StepStatusPending = "pending"
+	StepStatusRunning = "running"
+	StepStatusSuccess = "success"
+	StepStatusFailed  = "failed"
+)
+
+// 工具名称常量
+const (
+	ToolClaudeCode = "claude_code" // 调用 Claude Code CLI
+	ToolShell      = "shell"       // 执行 shell 命令
+	ToolReadFile   = "read_file"   // 读取文件
+	ToolWriteFile  = "write_file"  // 写入文件
+	ToolListFiles  = "list_files"  // 列出文件
+	ToolAskUser    = "ask_user"    // 询问用户
+	ToolComplete   = "complete"    // 完成任务
+)
 
 // ModelProviderInput 创建/更新模型提供商的输入
 type ModelProviderInput struct {
@@ -51,9 +96,13 @@ type AgentInput struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Type        string `json:"type"`
 	Prompt      string `json:"prompt"`
 	ProviderID  *int64 `json:"provider_id"`
 	Model       string `json:"model"`
+	Tools       string `json:"tools"`       // JSON数组
+	WorkingDir  string `json:"working_dir"`
+	MaxRetries  int    `json:"max_retries"`
 	Enabled     bool   `json:"enabled"`
 }
 
@@ -171,4 +220,65 @@ type ReportData struct {
 	ProjectStats []ProjectTimeStats `json:"project_stats"` // 项目时间统计
 	DailyStats   []DailyTaskStats   `json:"daily_stats"`   // 每日任务统计
 	Summary      ReportSummary      `json:"summary"`       // 汇总数据
+}
+
+// ========== AI会话相关模型 ==========
+
+// TaskConversation 任务AI会话
+type TaskConversation struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	AgentID   int64     `json:"agent_id"`
+	AgentName string    `json:"agent_name"` // Agent名称（查询时填充）
+	Status    string    `json:"status"`     // active/waiting_user/completed/failed
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ConversationMessage 会话消息
+type ConversationMessage struct {
+	ID             int64     `json:"id"`
+	ConversationID int64     `json:"conversation_id"`
+	Role           string    `json:"role"`     // user/assistant/system
+	Content        string    `json:"content"`  // 消息内容
+	MessageType    string    `json:"type"`     // text/action/question/result/error
+	Metadata       string    `json:"metadata"` // JSON: 执行的动作、选项等
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// 会话状态常量
+const (
+	ConversationStatusActive      = "active"       // AI正在处理
+	ConversationStatusWaitingUser = "waiting_user" // 等待用户回复
+	ConversationStatusCompleted   = "completed"    // 已完成
+	ConversationStatusFailed      = "failed"       // 失败
+)
+
+// 消息类型常量
+const (
+	MessageTypeText     = "text"     // 普通文本
+	MessageTypeAction   = "action"   // 执行动作
+	MessageTypeQuestion = "question" // 询问用户
+	MessageTypeResult   = "result"   // 执行结果
+	MessageTypeError    = "error"    // 错误信息
+)
+
+// StartConversationInput 开始AI会话的输入
+type StartConversationInput struct {
+	TaskID       int64  `json:"task_id"`
+	AgentID      int64  `json:"agent_id"`
+	ExtraContext string `json:"extra_context"` // 额外上下文（可选）
+}
+
+// SendMessageInput 发送消息的输入
+type SendMessageInput struct {
+	ConversationID int64  `json:"conversation_id"`
+	Content        string `json:"content"`
+}
+
+// ConversationDetail 会话详情（包含消息列表）
+type ConversationDetail struct {
+	Conversation TaskConversation      `json:"conversation"`
+	Messages     []ConversationMessage `json:"messages"`
+	Task         Task                  `json:"task"`
 }

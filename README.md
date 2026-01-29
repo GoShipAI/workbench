@@ -1,19 +1,76 @@
-# README
+# 工作台
 
-## About
+一款个人效率管理软件，帮助你管理日常任务、跟踪工时和组织项目。
 
-This is the official Wails Vue-TS template.
+## 功能介绍
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+### 📋 工作台
+今日任务的快捷入口和概览面板：
+- 查看今日任务列表和完成进度
+- 统计卡片：任务数、已完成数、计划工时、完成工时
+- 快速创建今日任务或待办
+- 一键完成任务并记录实际工时
+- 日程规划：从待办池安排任务到指定日期
 
-## Live Development
+### ✅ 任务管理
+管理所有已安排日期的任务：
+- 按日期范围、项目、状态筛选任务
+- 任务状态：已安排 → 进行中 → 已完成
+- 支持设置截止日期、优先级、紧急程度
+- 工时录入：直接填写或通过开始/结束时间自动计算
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+### 📝 待办
+任务收集箱，快速记录想法：
+- 先捕获，后整理 - 无需立即决定执行时间
+- 按项目分类筛选
+- 随时可将待办分配到具体日期，转为正式任务
 
-## Building
+### 📁 项目管理
+组织和分类你的工作：
+- 创建项目并设置颜色标识
+- 任务可关联项目，便于分类和统计
+- 支持项目归档
 
-To build a redistributable, production mode package, use `wails build`.
+### 🤖 AI Agent（实验功能）
+为任务配备 AI 助手：
+- 基于 ReAct 模式的自主执行 Agent
+- 内置工具：Shell 命令、文件读写、Claude Code 等
+- 支持多轮对话和执行步骤追踪
+- 可自定义 Agent 提示词和工具配置
+
+## 工作流示例
+
+```
+1. 想到要做的事 → 快速添加到「待办」
+2. 规划时间时 → 从「待办」分配到具体日期 → 进入「任务管理」
+3. 执行当天 → 在「工作台」查看今日任务并完成
+```
+
+## 技术栈
+
+- **框架**: Wails v2 (Go + Vue)
+- **前端**: Vue 3 + TypeScript + Arco Design
+- **后端**: Go + SQLite
+- **AI**: 支持 OpenAI 兼容 API（DeepSeek、OpenAI 等）
+
+## 开发
+
+```bash
+# 安装依赖
+make frontend-install
+
+# 开发模式（热重载）
+make dev
+
+# 构建
+make build           # 当前平台
+make build-all       # macOS + Windows
+
+# 查看所有命令
+make help
+```
+
+## 数据存储
+
+- macOS: `~/Library/Application Support/Workbench/`
+- Windows: `%APPDATA%/Workbench/`

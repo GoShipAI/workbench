@@ -122,9 +122,13 @@ func createTables() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			description TEXT DEFAULT '',
+			type TEXT DEFAULT 'executor',
 			prompt TEXT DEFAULT '',
 			provider_id INTEGER,
 			model TEXT DEFAULT '',
+			tools TEXT DEFAULT '[]',
+			working_dir TEXT DEFAULT '',
+			max_retries INTEGER DEFAULT 3,
 			enabled INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (provider_id) REFERENCES model_providers(id) ON DELETE SET NULL
@@ -167,9 +171,39 @@ func createTables() error {
 		"ALTER TABLE tasks ADD COLUMN actual_start TEXT",
 		"ALTER TABLE tasks ADD COLUMN actual_hours REAL DEFAULT 0",
 		"ALTER TABLE projects ADD COLUMN archived INTEGER DEFAULT 0",
+		// Agent 表新增字段
+		"ALTER TABLE agents ADD COLUMN type TEXT DEFAULT 'executor'",
+		"ALTER TABLE agents ADD COLUMN tools TEXT DEFAULT '[]'",
+		"ALTER TABLE agents ADD COLUMN working_dir TEXT DEFAULT ''",
+		"ALTER TABLE agents ADD COLUMN max_retries INTEGER DEFAULT 3",
 	}
 	for _, sql := range migrationColumns {
 		db.Exec(sql) // 忽略错误，因为列可能已存在
+	}
+
+	// Agent执行步骤表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS agent_steps (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			conversation_id INTEGER NOT NULL,
+			step_num INTEGER NOT NULL,
+			thought TEXT DEFAULT '',
+			action TEXT DEFAULT '',
+			action_input TEXT DEFAULT '{}',
+			observation TEXT DEFAULT '',
+			status TEXT DEFAULT 'pending',
+			error TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (conversation_id) REFERENCES task_conversations(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 agent_steps 表失败: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_steps_conversation ON agent_steps(conversation_id)`)
+	if err != nil {
+		return fmt.Errorf("创建 steps conversation_id 索引失败: %v", err)
 	}
 
 	// 初始化默认模型提供商
@@ -206,6 +240,51 @@ func createTables() error {
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline)`)
 	if err != nil {
 		return fmt.Errorf("创建 deadline 索引失败: %v", err)
+	}
+
+	// AI会话表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS task_conversations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_id INTEGER NOT NULL,
+			agent_id INTEGER NOT NULL,
+			status TEXT DEFAULT 'active',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 task_conversations 表失败: %v", err)
+	}
+
+	// 会话消息表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS conversation_messages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			conversation_id INTEGER NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT DEFAULT '',
+			message_type TEXT DEFAULT 'text',
+			metadata TEXT DEFAULT '{}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (conversation_id) REFERENCES task_conversations(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 conversation_messages 表失败: %v", err)
+	}
+
+	// 会话索引
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_conversations_task ON task_conversations(task_id)`)
+	if err != nil {
+		return fmt.Errorf("创建 task_id 索引失败: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON conversation_messages(conversation_id)`)
+	if err != nil {
+		return fmt.Errorf("创建 conversation_id 索引失败: %v", err)
 	}
 
 	return nil

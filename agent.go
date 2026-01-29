@@ -12,7 +12,8 @@ func (a *App) GetAgents() ([]Agent, error) {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, name, description, prompt, provider_id, model, enabled, created_at
+		SELECT id, name, description, COALESCE(type, 'executor'), prompt, provider_id, model,
+		       COALESCE(tools, '[]'), COALESCE(working_dir, ''), COALESCE(max_retries, 3), enabled, created_at
 		FROM agents
 		ORDER BY created_at DESC
 	`)
@@ -25,8 +26,9 @@ func (a *App) GetAgents() ([]Agent, error) {
 	var agents []Agent
 	for rows.Next() {
 		var agent Agent
-		if err := rows.Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Prompt,
-			&agent.ProviderID, &agent.Model, &agent.Enabled, &agent.CreatedAt); err != nil {
+		if err := rows.Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Type, &agent.Prompt,
+			&agent.ProviderID, &agent.Model, &agent.Tools, &agent.WorkingDir, &agent.MaxRetries,
+			&agent.Enabled, &agent.CreatedAt); err != nil {
 			log.Printf("扫描Agent失败: %v", err)
 			return nil, fmt.Errorf("扫描Agent失败: %v", err)
 		}
@@ -44,10 +46,12 @@ func (a *App) GetAgent(id int64) (*Agent, error) {
 
 	var agent Agent
 	err := db.QueryRow(`
-		SELECT id, name, description, prompt, provider_id, model, enabled, created_at
+		SELECT id, name, description, COALESCE(type, 'executor'), prompt, provider_id, model,
+		       COALESCE(tools, '[]'), COALESCE(working_dir, ''), COALESCE(max_retries, 3), enabled, created_at
 		FROM agents WHERE id = ?
-	`, id).Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Prompt,
-		&agent.ProviderID, &agent.Model, &agent.Enabled, &agent.CreatedAt)
+	`, id).Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Type, &agent.Prompt,
+		&agent.ProviderID, &agent.Model, &agent.Tools, &agent.WorkingDir, &agent.MaxRetries,
+		&agent.Enabled, &agent.CreatedAt)
 	if err != nil {
 		log.Printf("查询Agent失败: %v", err)
 		return nil, fmt.Errorf("查询Agent失败: %v", err)
@@ -66,10 +70,25 @@ func (a *App) CreateAgent(input AgentInput) (*Agent, error) {
 		return nil, fmt.Errorf("Agent名称不能为空")
 	}
 
+	// 默认值
+	agentType := input.Type
+	if agentType == "" {
+		agentType = "executor"
+	}
+	tools := input.Tools
+	if tools == "" {
+		tools = "[]"
+	}
+	maxRetries := input.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 3
+	}
+
 	result, err := db.Exec(`
-		INSERT INTO agents (name, description, prompt, provider_id, model, enabled)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, input.Name, input.Description, input.Prompt, input.ProviderID, input.Model, input.Enabled)
+		INSERT INTO agents (name, description, type, prompt, provider_id, model, tools, working_dir, max_retries, enabled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, input.Name, input.Description, agentType, input.Prompt, input.ProviderID, input.Model,
+		tools, input.WorkingDir, maxRetries, input.Enabled)
 	if err != nil {
 		log.Printf("创建Agent失败: %v", err)
 		return nil, fmt.Errorf("创建Agent失败: %v", err)
@@ -94,11 +113,23 @@ func (a *App) UpdateAgent(input AgentInput) error {
 		return fmt.Errorf("Agent名称不能为空")
 	}
 
+	// 默认值
+	agentType := input.Type
+	if agentType == "" {
+		agentType = "executor"
+	}
+	tools := input.Tools
+	if tools == "" {
+		tools = "[]"
+	}
+
 	_, err := db.Exec(`
 		UPDATE agents
-		SET name = ?, description = ?, prompt = ?, provider_id = ?, model = ?, enabled = ?
+		SET name = ?, description = ?, type = ?, prompt = ?, provider_id = ?, model = ?,
+		    tools = ?, working_dir = ?, max_retries = ?, enabled = ?
 		WHERE id = ?
-	`, input.Name, input.Description, input.Prompt, input.ProviderID, input.Model, input.Enabled, input.ID)
+	`, input.Name, input.Description, agentType, input.Prompt, input.ProviderID, input.Model,
+		tools, input.WorkingDir, input.MaxRetries, input.Enabled, input.ID)
 	if err != nil {
 		log.Printf("更新Agent失败: %v", err)
 		return fmt.Errorf("更新Agent失败: %v", err)
@@ -131,7 +162,8 @@ func (a *App) GetEnabledAgents() ([]Agent, error) {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, name, description, prompt, provider_id, model, enabled, created_at
+		SELECT id, name, description, COALESCE(type, 'executor'), prompt, provider_id, model,
+		       COALESCE(tools, '[]'), COALESCE(working_dir, ''), COALESCE(max_retries, 3), enabled, created_at
 		FROM agents
 		WHERE enabled = 1
 		ORDER BY created_at DESC
@@ -145,8 +177,9 @@ func (a *App) GetEnabledAgents() ([]Agent, error) {
 	var agents []Agent
 	for rows.Next() {
 		var agent Agent
-		if err := rows.Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Prompt,
-			&agent.ProviderID, &agent.Model, &agent.Enabled, &agent.CreatedAt); err != nil {
+		if err := rows.Scan(&agent.ID, &agent.Name, &agent.Description, &agent.Type, &agent.Prompt,
+			&agent.ProviderID, &agent.Model, &agent.Tools, &agent.WorkingDir, &agent.MaxRetries,
+			&agent.Enabled, &agent.CreatedAt); err != nil {
 			log.Printf("扫描Agent失败: %v", err)
 			return nil, fmt.Errorf("扫描Agent失败: %v", err)
 		}

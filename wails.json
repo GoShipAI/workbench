@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "工作台",
-  "outputfilename": "工作台",
+  "name": "Workbench",
+  "outputfilename": "Workbench",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",

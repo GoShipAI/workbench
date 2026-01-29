@@ -168,15 +168,44 @@ const handleProviderSubmit = async () => {
 const agents = ref<main.Agent[]>([])
 const agentModalVisible = ref(false)
 const isEditingAgent = ref(false)
+const selectedTools = ref<string[]>([])
 const agentForm = ref({
   id: 0,
   name: '',
   description: '',
+  type: 'executor',
   prompt: '',
   provider_id: undefined as number | undefined,
   model: '',
+  tools: '[]',
+  working_dir: '',
+  max_retries: 3,
   enabled: true
 })
+
+// 默认工具列表（与后端 ai_executor.go 保持一致）
+const defaultTools = ['shell', 'read_file', 'write_file', 'list_files']
+
+// 解析工具 JSON 为数组
+const parseTools = (toolsJson: string): string[] => {
+  try {
+    const arr = JSON.parse(toolsJson)
+    if (!arr || arr.length === 0) {
+      return [...defaultTools] // 空数组返回默认工具
+    }
+    // 过滤掉 ask_user 和 complete（这两个是内置必须的）
+    return arr.filter((t: string) => !['ask_user', 'complete'].includes(t))
+  } catch {
+    return [...defaultTools]
+  }
+}
+
+// 将工具数组转为 JSON（自动添加 ask_user 和 complete）
+const toolsToJson = (tools: string[]): string => {
+  if (tools.length === 0) return '[]'
+  const fullTools = [...tools, 'ask_user', 'complete']
+  return JSON.stringify(fullTools)
+}
 
 const loadAgents = async () => {
   try {
@@ -190,13 +219,18 @@ const loadAgents = async () => {
 
 const openCreateAgent = () => {
   isEditingAgent.value = false
+  selectedTools.value = [...defaultTools] // 默认选中常用工具
   agentForm.value = {
     id: 0,
     name: '',
     description: '',
+    type: 'executor',
     prompt: '',
     provider_id: undefined,
     model: '',
+    tools: '[]',
+    working_dir: '',
+    max_retries: 3,
     enabled: true
   }
   agentModalVisible.value = true
@@ -204,13 +238,18 @@ const openCreateAgent = () => {
 
 const openEditAgent = (agent: main.Agent) => {
   isEditingAgent.value = true
+  selectedTools.value = parseTools(agent.tools || '[]')
   agentForm.value = {
     id: agent.id,
     name: agent.name,
     description: agent.description,
+    type: agent.type || 'executor',
     prompt: agent.prompt,
     provider_id: agent.provider_id || undefined,
     model: agent.model,
+    tools: agent.tools || '[]',
+    working_dir: agent.working_dir || '',
+    max_retries: agent.max_retries || 3,
     enabled: agent.enabled
   }
   agentModalVisible.value = true
@@ -223,13 +262,20 @@ const handleAgentSubmit = async () => {
   }
 
   try {
+    // 将选中的工具转为 JSON
+    const toolsJson = toolsToJson(selectedTools.value)
+
     const input: main.AgentInput = {
       id: agentForm.value.id,
       name: agentForm.value.name,
       description: agentForm.value.description,
+      type: agentForm.value.type,
       prompt: agentForm.value.prompt,
       provider_id: agentForm.value.provider_id,
       model: agentForm.value.model,
+      tools: toolsJson,
+      working_dir: agentForm.value.working_dir,
+      max_retries: agentForm.value.max_retries,
       enabled: agentForm.value.enabled
     }
 
@@ -465,6 +511,21 @@ onMounted(() => {
             :auto-size="{ minRows: 4, maxRows: 10 }"
           />
         </a-form-item>
+        <a-form-item label="可用工具">
+          <a-checkbox-group v-model="selectedTools" class="tools-checkbox-group">
+            <a-checkbox value="shell">Shell 命令</a-checkbox>
+            <a-checkbox value="read_file">读取文件</a-checkbox>
+            <a-checkbox value="write_file">写入文件</a-checkbox>
+            <a-checkbox value="list_files">列出文件</a-checkbox>
+            <a-checkbox value="claude_code">Claude Code（需安装CLI）</a-checkbox>
+          </a-checkbox-group>
+          <div class="tools-hint">
+            ask_user 和 complete 工具会自动添加。Claude Code 需要先安装 <a href="https://claude.ai/code" target="_blank">Claude Code CLI</a>
+          </div>
+        </a-form-item>
+        <a-form-item label="工作目录">
+          <a-input v-model="agentForm.working_dir" placeholder="默认当前目录，如: /path/to/project" />
+        </a-form-item>
         <a-form-item label="启用">
           <a-switch v-model="agentForm.enabled" />
         </a-form-item>
@@ -537,5 +598,27 @@ onMounted(() => {
 .provider-desc {
   color: #86909c;
   font-size: 12px;
+}
+
+.tools-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.tools-checkbox-group :deep(.arco-checkbox) {
+  width: 100%;
+}
+
+.tools-hint {
+  color: #86909c;
+  font-size: 12px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.tools-hint a {
+  color: #165DFF;
 }
 </style>

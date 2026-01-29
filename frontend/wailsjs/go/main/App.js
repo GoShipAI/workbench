@@ -54,6 +54,14 @@ export function GetAllProjects() {
   return window['go']['main']['App']['GetAllProjects']();
 }
 
+export function GetConversationDetail(arg1) {
+  return window['go']['main']['App']['GetConversationDetail'](arg1);
+}
+
+export function GetConversationSteps(arg1) {
+  return window['go']['main']['App']['GetConversationSteps'](arg1);
+}
+
 export function GetDailyTaskStats(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetDailyTaskStats'](arg1, arg2, arg3);
 }
@@ -90,6 +98,14 @@ export function GetReportData(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetReportData'](arg1, arg2, arg3);
 }
 
+export function GetTask(arg1) {
+  return window['go']['main']['App']['GetTask'](arg1);
+}
+
+export function GetTaskConversations(arg1) {
+  return window['go']['main']['App']['GetTaskConversations'](arg1);
+}
+
 export function GetTasksByDate(arg1) {
   return window['go']['main']['App']['GetTasksByDate'](arg1);
 }
@@ -100,6 +116,18 @@ export function GetTasksByDateRange(arg1, arg2) {
 
 export function GetWorkbenchData() {
   return window['go']['main']['App']['GetWorkbenchData']();
+}
+
+export function SendMessage(arg1) {
+  return window['go']['main']['App']['SendMessage'](arg1);
+}
+
+export function StartConversation(arg1) {
+  return window['go']['main']['App']['StartConversation'](arg1);
+}
+
+export function StopConversation(arg1) {
+  return window['go']['main']['App']['StopConversation'](arg1);
 }
 
 export function UpdateAgent(arg1) {

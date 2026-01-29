@@ -18,6 +18,7 @@ import {
 import { main } from '../../wailsjs/go/models'
 import { Message } from '@arco-design/web-vue'
 import dayjs from 'dayjs'
+import TaskAIChat from './TaskAIChat.vue'
 
 interface TaskForm {
   id: number
@@ -78,6 +79,15 @@ const completeForm = ref<CompleteForm>({
 })
 
 const currentTask = ref<main.Task | null>(null)
+
+// AI会话相关
+const aiChatVisible = ref(false)
+const aiChatTask = ref<main.Task | null>(null)
+
+const openAIChat = (task: main.Task) => {
+  aiChatTask.value = task
+  aiChatVisible.value = true
+}
 
 // 筛选后的任务列表
 const filteredTasks = computed(() => {
@@ -440,6 +450,10 @@ onMounted(() => {
           >
             完成
           </a-button>
+          <a-button type="outline" size="small" @click="openAIChat(record)">
+            <template #icon><icon-robot /></template>
+            AI
+          </a-button>
           <a-button type="text" size="small" @click="openEditModal(record)">
             编辑
           </a-button>
@@ -575,6 +589,12 @@ onMounted(() => {
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- AI会话弹窗 -->
+    <TaskAIChat
+      v-model:visible="aiChatVisible"
+      :task="aiChatTask"
+    />
   </div>
 </template>
 

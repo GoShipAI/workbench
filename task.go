@@ -18,6 +18,24 @@ const taskSelectSQL = `
 	LEFT JOIN projects p ON t.project_id = p.id
 `
 
+// GetTask 获取单个任务
+func (a *App) GetTask(id int64) (*Task, error) {
+	if db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
+	var t Task
+	err := db.QueryRow(taskSelectSQL+`WHERE t.id = ?`, id).Scan(
+		&t.ID, &t.ProjectID, &t.ProjectName, &t.Name, &t.Description,
+		&t.Date, &t.StartTime, &t.EndTime, &t.Hours, &t.Deadline, &t.Priority,
+		&t.Urgency, &t.Status, &t.ActualStart, &t.ActualHours, &t.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("任务不存在: %v", err)
+	}
+
+	return &t, nil
+}
+
 // GetTasksByDate 根据日期获取任务
 func (a *App) GetTasksByDate(date string) ([]Task, error) {
 	if db == nil {

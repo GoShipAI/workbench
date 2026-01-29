@@ -4,9 +4,13 @@ export namespace main {
 	    id: number;
 	    name: string;
 	    description: string;
+	    type: string;
 	    prompt: string;
 	    provider_id?: number;
 	    model: string;
+	    tools: string;
+	    working_dir: string;
+	    max_retries: number;
 	    enabled: boolean;
 	    // Go type: time
 	    created_at: any;
@@ -20,9 +24,13 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.type = source["type"];
 	        this.prompt = source["prompt"];
 	        this.provider_id = source["provider_id"];
 	        this.model = source["model"];
+	        this.tools = source["tools"];
+	        this.working_dir = source["working_dir"];
+	        this.max_retries = source["max_retries"];
 	        this.enabled = source["enabled"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
@@ -49,9 +57,13 @@ export namespace main {
 	    id: number;
 	    name: string;
 	    description: string;
+	    type: string;
 	    prompt: string;
 	    provider_id?: number;
 	    model: string;
+	    tools: string;
+	    working_dir: string;
+	    max_retries: number;
 	    enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -63,11 +75,64 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.type = source["type"];
 	        this.prompt = source["prompt"];
 	        this.provider_id = source["provider_id"];
 	        this.model = source["model"];
+	        this.tools = source["tools"];
+	        this.working_dir = source["working_dir"];
+	        this.max_retries = source["max_retries"];
 	        this.enabled = source["enabled"];
 	    }
+	}
+	export class AgentStep {
+	    id: number;
+	    conversation_id: number;
+	    step_num: number;
+	    thought: string;
+	    action: string;
+	    action_input: string;
+	    observation: string;
+	    status: string;
+	    error: string;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.conversation_id = source["conversation_id"];
+	        this.step_num = source["step_num"];
+	        this.thought = source["thought"];
+	        this.action = source["action"];
+	        this.action_input = source["action_input"];
+	        this.observation = source["observation"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CompleteTaskInput {
 	    id: number;
@@ -85,6 +150,189 @@ export namespace main {
 	        this.actual_hours = source["actual_hours"];
 	    }
 	}
+	export class Task {
+	    id: number;
+	    project_id?: number;
+	    project_name: string;
+	    name: string;
+	    description: string;
+	    date?: string;
+	    start_time?: string;
+	    end_time?: string;
+	    hours: number;
+	    deadline?: string;
+	    priority: string;
+	    urgency: string;
+	    status: string;
+	    actual_start?: string;
+	    actual_hours: number;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Task(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.project_id = source["project_id"];
+	        this.project_name = source["project_name"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.date = source["date"];
+	        this.start_time = source["start_time"];
+	        this.end_time = source["end_time"];
+	        this.hours = source["hours"];
+	        this.deadline = source["deadline"];
+	        this.priority = source["priority"];
+	        this.urgency = source["urgency"];
+	        this.status = source["status"];
+	        this.actual_start = source["actual_start"];
+	        this.actual_hours = source["actual_hours"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ConversationMessage {
+	    id: number;
+	    conversation_id: number;
+	    role: string;
+	    content: string;
+	    type: string;
+	    metadata: string;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConversationMessage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.conversation_id = source["conversation_id"];
+	        this.role = source["role"];
+	        this.content = source["content"];
+	        this.type = source["type"];
+	        this.metadata = source["metadata"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TaskConversation {
+	    id: number;
+	    task_id: number;
+	    agent_id: number;
+	    agent_name: string;
+	    status: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new TaskConversation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.task_id = source["task_id"];
+	        this.agent_id = source["agent_id"];
+	        this.agent_name = source["agent_name"];
+	        this.status = source["status"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ConversationDetail {
+	    conversation: TaskConversation;
+	    messages: ConversationMessage[];
+	    task: Task;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConversationDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conversation = this.convertValues(source["conversation"], TaskConversation);
+	        this.messages = this.convertValues(source["messages"], ConversationMessage);
+	        this.task = this.convertValues(source["task"], Task);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class DailyTaskStats {
 	    date: string;
 	    total_count: number;
@@ -288,67 +536,38 @@ export namespace main {
 		}
 	}
 	
-	export class Task {
-	    id: number;
-	    project_id?: number;
-	    project_name: string;
-	    name: string;
-	    description: string;
-	    date?: string;
-	    start_time?: string;
-	    end_time?: string;
-	    hours: number;
-	    deadline?: string;
-	    priority: string;
-	    urgency: string;
-	    status: string;
-	    actual_start?: string;
-	    actual_hours: number;
-	    // Go type: time
-	    created_at: any;
+	export class SendMessageInput {
+	    conversation_id: number;
+	    content: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Task(source);
+	        return new SendMessageInput(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.project_id = source["project_id"];
-	        this.project_name = source["project_name"];
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.date = source["date"];
-	        this.start_time = source["start_time"];
-	        this.end_time = source["end_time"];
-	        this.hours = source["hours"];
-	        this.deadline = source["deadline"];
-	        this.priority = source["priority"];
-	        this.urgency = source["urgency"];
-	        this.status = source["status"];
-	        this.actual_start = source["actual_start"];
-	        this.actual_hours = source["actual_hours"];
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.conversation_id = source["conversation_id"];
+	        this.content = source["content"];
+	    }
+	}
+	export class StartConversationInput {
+	    task_id: number;
+	    agent_id: number;
+	    extra_context: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartConversationInput(source);
 	    }
 	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.task_id = source["task_id"];
+	        this.agent_id = source["agent_id"];
+	        this.extra_context = source["extra_context"];
+	    }
 	}
+	
+	
 	export class TaskInput {
 	    id: number;
 	    project_id?: number;

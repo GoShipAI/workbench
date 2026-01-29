@@ -1,14 +1,13 @@
 # 工作台 Makefile
 # Wails v2 项目常用命令
 
-.PHONY: dev build clean run install frontend backend lint test help
+.PHONY: dev build build-all build-mac build-universal build-windows build-linux build-all-platforms clean run install frontend backend lint test help
 
 # 默认目标
 .DEFAULT_GOAL := help
 
 # 变量
-APP_NAME := 工作台
-APP_NAME_EN := Workbench
+APP_NAME := Workbench
 BUILD_DIR := build/bin
 FRONTEND_DIR := frontend
 
@@ -16,21 +15,37 @@ FRONTEND_DIR := frontend
 dev:
 	wails dev
 
-# 构建生产版本
+# 构建当前平台版本
 build:
 	wails build
 
+# 构建所有平台版本 (macOS + Windows)
+build-all: build-mac build-windows
+	@echo "构建完成！"
+	@echo "macOS: $(BUILD_DIR)/$(APP_NAME).app"
+	@echo "Windows: $(BUILD_DIR)/$(APP_NAME).exe"
+
 # 构建 macOS 通用版本 (Intel + Apple Silicon)
-build-universal:
+build-mac:
 	wails build -platform darwin/universal
+	@echo "macOS 版本构建完成"
+
+# 构建 macOS 通用版本 (别名)
+build-universal: build-mac
 
 # 构建 Windows 版本
 build-windows:
 	wails build -platform windows/amd64
+	@echo "Windows 版本构建完成"
 
 # 构建 Linux 版本
 build-linux:
 	wails build -platform linux/amd64
+	@echo "Linux 版本构建完成"
+
+# 构建所有平台版本 (macOS + Windows + Linux)
+build-all-platforms: build-mac build-windows build-linux
+	@echo "所有平台构建完成！"
 
 # 清理构建产物
 clean:
@@ -73,16 +88,16 @@ bindings:
 
 # 查看应用日志 (macOS)
 logs:
-	log stream --predicate 'processImagePath contains "$(APP_NAME_EN)"' --level debug
+	log stream --predicate 'processImagePath contains "$(APP_NAME)"' --level debug
 
 # 打开数据目录 (macOS)
 open-data:
-	open ~/Library/Application\ Support/$(APP_NAME_EN)
+	open ~/Library/Application\ Support/$(APP_NAME)
 
 # 查看数据库内容
 db-info:
-	@echo "Database location: ~/Library/Application Support/$(APP_NAME_EN)/workbench.db"
-	@sqlite3 ~/Library/Application\ Support/$(APP_NAME_EN)/workbench.db ".tables" 2>/dev/null || echo "Database not found"
+	@echo "Database location: ~/Library/Application Support/$(APP_NAME)/workbench.db"
+	@sqlite3 ~/Library/Application\ Support/$(APP_NAME)/workbench.db ".tables" 2>/dev/null || echo "Database not found"
 
 # 统计代码行数
 loc:
@@ -97,10 +112,12 @@ help:
 	@echo ""
 	@echo "开发:"
 	@echo "  make dev              - 启动开发模式（热重载）"
-	@echo "  make build            - 构建生产版本"
-	@echo "  make build-universal  - 构建 macOS 通用版本"
+	@echo "  make build            - 构建当前平台版本"
+	@echo "  make build-all        - 构建 macOS + Windows 版本"
+	@echo "  make build-mac        - 构建 macOS 通用版本"
 	@echo "  make build-windows    - 构建 Windows 版本"
 	@echo "  make build-linux      - 构建 Linux 版本"
+	@echo "  make build-all-platforms - 构建所有平台版本"
 	@echo "  make run              - 运行已构建的应用"
 	@echo ""
 	@echo "依赖:"
