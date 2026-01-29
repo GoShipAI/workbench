@@ -29,8 +29,8 @@ A personal productivity app featuring an **Agentic AI assistant** for task manag
 
 Download the latest release for your platform:
 
-- [macOS (Universal)](https://github.com/user/Workbench/releases) - Apple Silicon & Intel
-- [Windows](https://github.com/user/Workbench/releases) - x64
+- [macOS (Universal)](https://github.com/GoShipAI/workbench/releases) - Apple Silicon & Intel
+- [Windows](https://github.com/GoShipAI/workbench/releases) - x64
 
 ### Tech Stack
 
@@ -126,7 +126,7 @@ MIT License
 
 ### 下载安装
 
-前往 [Releases](https://github.com/user/Workbench/releases) 页面下载：
+前往 [Releases](https://github.com/GoShipAI/workbench/releases) 页面下载：
 
 - **macOS**: `Workbench.app` (通用版本，支持 Intel 和 Apple Silicon)
 - **Windows**: `Workbench.exe`
