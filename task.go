@@ -97,6 +97,65 @@ func (a *App) GetPendingTasks() ([]Task, error) {
 	return scanTasks(rows)
 }
 
+// GetOverdueTasks 获取逾期任务（日期早于今天且未完成）
+func (a *App) GetOverdueTasks() ([]Task, error) {
+	if db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
+	today := time.Now().Format("2006-01-02")
+	rows, err := db.Query(taskSelectSQL+`
+		WHERE t.date < ? AND t.status != ?
+		ORDER BY t.date DESC, t.priority DESC
+	`, today, TaskStatusCompleted)
+	if err != nil {
+		log.Printf("查询逾期任务失败: %v", err)
+		return nil, fmt.Errorf("查询逾期任务失败: %v", err)
+	}
+	defer rows.Close()
+
+	return scanTasks(rows)
+}
+
+// RescheduleTask 将任务顺延到指定日期
+func (a *App) RescheduleTask(taskID int64, newDate string) error {
+	if db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	_, err := db.Exec(`
+		UPDATE tasks SET date = ?, status = ? WHERE id = ?
+	`, newDate, TaskStatusScheduled, taskID)
+	if err != nil {
+		log.Printf("顺延任务失败: %v", err)
+		return fmt.Errorf("顺延任务失败: %v", err)
+	}
+
+	log.Printf("任务 %d 已顺延到 %s", taskID, newDate)
+	return nil
+}
+
+// RescheduleAllOverdueTasks 将所有逾期任务顺延到今天
+func (a *App) RescheduleAllOverdueTasks() (int64, error) {
+	if db == nil {
+		return 0, fmt.Errorf("数据库未初始化")
+	}
+
+	today := time.Now().Format("2006-01-02")
+	result, err := db.Exec(`
+		UPDATE tasks SET date = ?, status = ?
+		WHERE date < ? AND status != ?
+	`, today, TaskStatusScheduled, today, TaskStatusCompleted)
+	if err != nil {
+		log.Printf("批量顺延任务失败: %v", err)
+		return 0, fmt.Errorf("批量顺延任务失败: %v", err)
+	}
+
+	count, _ := result.RowsAffected()
+	log.Printf("已将 %d 个逾期任务顺延到今天", count)
+	return count, nil
+}
+
 // scanTasks 扫描任务结果集
 func scanTasks(rows interface{ Next() bool; Scan(...any) error }) ([]Task, error) {
 	var tasks []Task

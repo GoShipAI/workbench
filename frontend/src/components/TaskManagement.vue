@@ -108,21 +108,21 @@ const isSingleDay = computed(() => {
 
 const columns = computed(() => {
   const baseColumns: any[] = [
-    { title: '任务名称', dataIndex: 'name', ellipsis: true, slotName: 'name' },
-    { title: '项目', dataIndex: 'project_name', width: 100 },
+    { title: '任务名称', dataIndex: 'name', ellipsis: true, slotName: 'name', minWidth: 200 },
+    { title: '项目', dataIndex: 'project_name', width: 120 },
   ]
 
   // 日期范围模式显示日期列
   if (!isSingleDay.value) {
-    baseColumns.push({ title: '日期', dataIndex: 'date', width: 100 })
+    baseColumns.push({ title: '日期', dataIndex: 'date', width: 110 })
   }
 
   baseColumns.push(
-    { title: '开始', dataIndex: 'start_time', width: 70 },
-    { title: '工时', dataIndex: 'hours', width: 60 },
-    { title: '截止', dataIndex: 'deadline', width: 100, slotName: 'deadline' },
-    { title: '状态', dataIndex: 'status', width: 90, slotName: 'status' },
-    { title: '操作', slotName: 'actions', width: 180 }
+    { title: '开始', dataIndex: 'start_time', width: 80, align: 'center' },
+    { title: '工时', dataIndex: 'hours', width: 60, align: 'center' },
+    { title: '截止', dataIndex: 'deadline', width: 120, slotName: 'deadline' },
+    { title: '状态', dataIndex: 'status', width: 90, slotName: 'status', align: 'center' },
+    { title: '操作', slotName: 'actions', width: 200, align: 'center', fixed: 'right' }
   )
 
   return baseColumns
@@ -626,6 +626,10 @@ onMounted(() => {
 
 .tasks-table {
   background: #2a2a2b;
+}
+
+.tasks-table :deep(.arco-table) {
+  table-layout: fixed;
 }
 
 .task-name-cell {

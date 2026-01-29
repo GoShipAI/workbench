@@ -4,7 +4,7 @@ import { ref, computed, onMounted, watch, defineProps } from 'vue'
 const props = defineProps<{
   active: boolean
 }>()
-import { GetWorkbenchData, GetProjects, CreateTask, CompleteTask, GetPendingTasks, AssignTaskToDate, GetTasksByDate } from '../../wailsjs/go/main/App'
+import { GetWorkbenchData, GetProjects, CreateTask, CompleteTask, GetPendingTasks, AssignTaskToDate, GetTasksByDate, GetOverdueTasks, RescheduleTask, RescheduleAllOverdueTasks } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { Message } from '@arco-design/web-vue'
 import dayjs from 'dayjs'
@@ -35,6 +35,11 @@ const data = ref<main.WorkbenchData>(new main.WorkbenchData({
 // 视图切换: today=今日任务, tomorrow=明日待办
 const viewMode = ref<'today' | 'tomorrow'>('today')
 const tomorrowTasks = ref<main.Task[]>([])
+
+// 逾期任务相关
+const overdueTasks = ref<main.Task[]>([])
+const overdueExpanded = ref(true)
+const rescheduleLoading = ref(false)
 
 const projects = ref<main.Project[]>([])
 const taskModalVisible = ref(false)
@@ -142,10 +147,14 @@ const formatPercent = (percent: number) => `${percent}%`
 const loadData = async () => {
   loading.value = true
   try {
-    const result = await GetWorkbenchData()
-    if (result) {
-      data.value = result
+    const [workbenchResult, overdueResult] = await Promise.all([
+      GetWorkbenchData(),
+      GetOverdueTasks()
+    ])
+    if (workbenchResult) {
+      data.value = workbenchResult
     }
+    overdueTasks.value = overdueResult || []
   } catch (err) {
     console.error('加载工作台数据失败:', err)
     Message.error('加载数据失败')
@@ -175,6 +184,44 @@ const switchView = (mode: 'today' | 'tomorrow') => {
   } else {
     loadTomorrowTasks()
   }
+}
+
+// 顺延单个任务到今天
+const rescheduleToToday = async (taskId: number) => {
+  try {
+    const today = dayjs().format('YYYY-MM-DD')
+    await RescheduleTask(taskId, today)
+    Message.success('已顺延到今天')
+    await loadData()
+  } catch (err) {
+    console.error('顺延任务失败:', err)
+    Message.error('顺延失败')
+  }
+}
+
+// 批量顺延所有逾期任务到今天
+const rescheduleAllToToday = async () => {
+  rescheduleLoading.value = true
+  try {
+    const count = await RescheduleAllOverdueTasks()
+    Message.success(`已将 ${count} 个任务顺延到今天`)
+    await loadData()
+  } catch (err) {
+    console.error('批量顺延失败:', err)
+    Message.error('批量顺延失败')
+  } finally {
+    rescheduleLoading.value = false
+  }
+}
+
+// 直接完成逾期任务
+const completeOverdueTask = async (task: main.Task) => {
+  selectedTask.value = task
+  completeForm.value = {
+    actual_start: task.start_time || dayjs().format('HH:mm'),
+    actual_hours: task.hours || 0
+  }
+  completeModalVisible.value = true
 }
 
 const loadProjects = async () => {
@@ -511,6 +558,47 @@ onMounted(() => {
           <a-alert v-if="data.pending_count > 0" type="warning" class="pending-alert">
             您有 {{ data.pending_count }} 个待办任务尚未安排
           </a-alert>
+
+          <!-- 逾期任务提醒 -->
+          <div v-if="overdueTasks.length > 0" class="overdue-section">
+            <div class="overdue-header" @click="overdueExpanded = !overdueExpanded">
+              <div class="overdue-title">
+                <icon-exclamation-circle-fill class="overdue-icon" />
+                <span>逾期任务 ({{ overdueTasks.length }})</span>
+              </div>
+              <div class="overdue-actions-header">
+                <a-button
+                  type="text"
+                  size="small"
+                  :loading="rescheduleLoading"
+                  @click.stop="rescheduleAllToToday"
+                >
+                  全部顺延到今天
+                </a-button>
+                <icon-down v-if="overdueExpanded" />
+                <icon-right v-else />
+              </div>
+            </div>
+            <div v-show="overdueExpanded" class="overdue-list">
+              <div v-for="task in overdueTasks" :key="task.id" class="overdue-item">
+                <div class="overdue-task-info">
+                  <span class="overdue-task-name">{{ task.name }}</span>
+                  <span class="overdue-task-meta">
+                    <a-tag size="small" color="red">{{ task.date }}</a-tag>
+                    <a-tag v-if="task.project_name" size="small">{{ task.project_name }}</a-tag>
+                  </span>
+                </div>
+                <div class="overdue-task-actions">
+                  <a-button type="text" size="mini" @click="rescheduleToToday(task.id)">
+                    顺延
+                  </a-button>
+                  <a-button type="text" size="mini" status="success" @click="completeOverdueTask(task)">
+                    完成
+                  </a-button>
+                </div>
+              </div>
+            </div>
+          </div>
         </a-col>
 
         <!-- 右侧：任务列表 -->
@@ -1035,6 +1123,91 @@ onMounted(() => {
 
 .pending-alert {
   margin-top: 0;
+}
+
+/* 逾期任务区块样式 */
+.overdue-section {
+  margin-top: 12px;
+  background: #2a2a2b;
+  border: 1px solid #F53F3F40;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.overdue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F53F3F15;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.overdue-header:hover {
+  background: #F53F3F25;
+}
+
+.overdue-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #F53F3F;
+}
+
+.overdue-icon {
+  font-size: 16px;
+}
+
+.overdue-actions-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #86909c;
+}
+
+.overdue-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.overdue-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid #3a3a3c;
+}
+
+.overdue-item:first-child {
+  border-top: none;
+}
+
+.overdue-task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.overdue-task-name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overdue-task-meta {
+  display: flex;
+  gap: 6px;
+}
+
+.overdue-task-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .tasks-card {

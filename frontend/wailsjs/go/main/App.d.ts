@@ -42,6 +42,8 @@ export function GetModelProvider(arg1:number):Promise<main.ModelProvider>;
 
 export function GetModelProviders():Promise<Array<main.ModelProvider>>;
 
+export function GetOverdueTasks():Promise<Array<main.Task>>;
+
 export function GetPendingTasks():Promise<Array<main.Task>>;
 
 export function GetProjectTimeStats(arg1:string,arg2:string,arg3:Array<number>):Promise<Array<main.ProjectTimeStats>>;
@@ -59,6 +61,10 @@ export function GetTasksByDate(arg1:string):Promise<Array<main.Task>>;
 export function GetTasksByDateRange(arg1:string,arg2:string):Promise<Array<main.Task>>;
 
 export function GetWorkbenchData():Promise<main.WorkbenchData>;
+
+export function RescheduleAllOverdueTasks():Promise<number>;
+
+export function RescheduleTask(arg1:number,arg2:string):Promise<void>;
 
 export function SendMessage(arg1:main.SendMessageInput):Promise<main.ConversationDetail>;
 

@@ -82,6 +82,10 @@ export function GetModelProviders() {
   return window['go']['main']['App']['GetModelProviders']();
 }
 
+export function GetOverdueTasks() {
+  return window['go']['main']['App']['GetOverdueTasks']();
+}
+
 export function GetPendingTasks() {
   return window['go']['main']['App']['GetPendingTasks']();
 }
@@ -116,6 +120,14 @@ export function GetTasksByDateRange(arg1, arg2) {
 
 export function GetWorkbenchData() {
   return window['go']['main']['App']['GetWorkbenchData']();
+}
+
+export function RescheduleAllOverdueTasks() {
+  return window['go']['main']['App']['RescheduleAllOverdueTasks']();
+}
+
+export function RescheduleTask(arg1, arg2) {
+  return window['go']['main']['App']['RescheduleTask'](arg1, arg2);
 }
 
 export function SendMessage(arg1) {
